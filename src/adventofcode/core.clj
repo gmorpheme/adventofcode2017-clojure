@@ -1,6 +1,7 @@
 (ns adventofcode.core
   (:require [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.set :as set]))
 
 ;;; Day 2
 
@@ -228,6 +229,93 @@
 (defn day5b-result []
   (run-day5b (atom (load-instructions))))
 
+;;; Day 6
+
+(defn max-index
+  [mem]
+  (let [m (apply max mem)]
+    (.indexOf mem m)))
+
+(defn reallocate
+  "Do a single reallocation; find largest bank and distribute"
+  [mem]
+  {:pre [(vector? mem)]}
+  (let [bank (max-index mem)
+        blocks (get mem bank)
+        mem (assoc-in mem [bank] 0)
+        target-indices (take blocks (drop (inc bank) (cycle (range (count mem)))))]
+    (reduce #(update-in %1 [%2] inc) mem target-indices)))
+
+(defn run-reallocate
+  [mem]
+  (->> (iterate reallocate mem)                        ; memory arrangements
+       (reductions #(conj %1 %2) #{})                  ; arrangements seen at each step
+       (map-indexed (fn [idx seen] [idx (count seen)])) ; cardinality of seen against index
+       (drop-while (fn [[idx count]] (= idx count)))    ; points where the runtim exceeds cardinality
+       (first)                                         ; first time we don't increase seen set
+       (second)))                                      ; size of set = ; no reallocations
+
+(def day6-input [4 10 4 1 8 4 9 14 5 1 14 15 0 15 3 5])
+
+(defn day6a-result []
+  (run-reallocate day6-input))
+
+(defn day6b-result []
+  (let [state (first (drop (day6a-result) (iterate reallocate day6-input )))]
+    (run-reallocate state)))
+
+;;; Day 7
+
+(defn parse-line [line]
+  (let [re #"^(\w+)\s+\((\d+)\)(?:\s+->\s+(.*))?$"]
+    (when-let [matches (re-seq re line)]
+      (when-let [[name weight suffix] (rest (first matches))]
+        {:name name
+         :weight (Integer/parseInt weight)
+         :subprograms (when-not (str/blank? suffix) (str/split suffix #",\s+"))}))))
+
+(defn day7-input []
+  (->> (str/split-lines (slurp (io/resource "day7.txt")))
+       (map parse-line)
+       (keep identity)))
+
+(defn day7a [input]
+  (let [programs (into #{} (map :name input))
+        subprograms (into #{} (apply concat (map :subprograms input)))]
+    (set/difference programs subprograms)))
+
+(defn graph [input]
+  (into {} (map (fn [x] [(:name x) x]) input)))
+
+(defn day7a-result []
+  (first (day7a (day7-input))))
+
+(defn total-weight* [{:keys [name weight subprograms]} graph]
+  (apply + weight (map #(total-weight (get graph %) graph) subprograms)))
+
+(def total-weight (memoize total-weight*))
+
+(defn find-error
+  [graph program]
+  {:pre [(string? program)]}
+  (let [{:keys [weight subprograms] :as node} (get graph program)
+        subweights (into {} (map vector subprograms (map #(total-weight (get graph %) graph) subprograms)))
+        freqs (frequencies (vals subweights))]
+    (when (> (count freqs) 1)
+      ;; assume one subprogram with odd weight
+      (let [odd-weight (ffirst (filter (fn [[k v]] (= v 1)) freqs))
+            normal-weight (ffirst (filter (fn [[k v]] (> v 1)) freqs))
+            odd-program (ffirst (filter (fn [[k v]] (= v odd-weight)) subweights))]
+
+        (or
+         ;; try and find a responsible subprogram
+         (find-error graph odd-program)
+         ;; calculate a weight adjustment for the odd program
+         [odd-program (+ (:weight (get graph odd-program)) (- normal-weight odd-weight))])))))
+
+(defn day7b-result []
+  (find-error (graph (day7-input)) (day7a-result)))
+
 ;;; Main
 
 (defn -main []
@@ -240,4 +328,6 @@
   (println "Day 4 Part One:" (day4-result))
   (println "Day 4 Part Two:" (day4b-result))
   (println "Day 5 Part One:" (day5a-result))
-  (println "Day 5 Part Two:" (day5b-result)))
+  (println "Day 5 Part Two:" (day5b-result))
+  (println "Day 6 Part One:" (day6a-result))
+  (println "Day 6 Part Two:" (day6b-result)))
