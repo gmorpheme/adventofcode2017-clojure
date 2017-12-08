@@ -183,11 +183,8 @@
 (defn day4-result []
   (count (filter valid-passphrase? (load-passphrases))))
 
-(defn normalise-word [word]
-  (apply hash-set (map (fn [[k v]] [k (count v)]) (group-by identity word))))
-
 (defn valid-passphrase-part2? [words]
-  (let [normalised (into #{} (map normalise-word words))]
+  (let [normalised (into #{} (map frequencies words))]
     (= (count words) (count normalised))))
 
 (defn day4b-result []
@@ -316,6 +313,47 @@
 (defn day7b-result []
   (find-error (graph (day7-input)) (day7a-result)))
 
+;;; Day 8
+
+(defn parse-instruction
+  [line]
+  (letfn [(reg [s] (keyword s))
+          (command [register op] #(update % register (fnil op 0)))
+          (function [s i] (case s "inc" #(+ % i) "dec" #(- % i)))
+          (guard [reg cmp i] #(cmp (get % reg 0) i))
+          (comparison [s] (case s "<" < ">" > "==" = "<=" <= ">=" >= "!=" not=))
+          (arg [s] (Integer/parseInt s))
+          (instruction [c g] #(if (g %) (c %) %))]
+    (let [re #"^(\w+)\s+(\w+)\s+(-?\d+)\s+if\s+(\w+)\s+(\S+)\s+(-?\d+)$"
+          gs (rest (first (re-seq re line)))]
+      (instruction (command (reg (nth gs 0))
+                            (function (nth gs 1) (arg (nth gs 2))))
+                   (guard (reg (nth gs 3))
+                          (comparison (nth gs 4))
+                          (arg (nth gs 5)))))))
+
+(defn read-program [s]
+  (->> (str/split-lines s) (map parse-instruction)))
+
+(def day8-program (read-program (slurp (io/resource "day8.txt"))))
+
+(defn run-program [instructions]
+  (reduce #(%2 %1) {} instructions))
+
+(defn day8a-result []
+  (apply max (vals (run-program day8-program))))
+
+(defn instrumented [x]
+  #(let [state (x %)
+         m (reduce max 0 (vals state))]
+     (assoc state :max m)))
+
+(defn instrument-program [program]
+  (map instrumented program))
+
+(defn day8b-result []
+  (:max (run-program (instrument-program day8-program))))
+
 ;;; Main
 
 (defn -main []
@@ -330,4 +368,8 @@
   (println "Day 5 Part One:" (day5a-result))
   (println "Day 5 Part Two:" (day5b-result))
   (println "Day 6 Part One:" (day6a-result))
-  (println "Day 6 Part Two:" (day6b-result)))
+  (println "Day 6 Part Two:" (day6b-result))
+  (println "Day 7 Part One:" (day7a-result))
+  (println "Day 7 Part Two:" (day7b-result))
+  (println "Day 8 Part One:" (day8a-result))
+  (println "Day 8 Part Two:" (day8b-result)))

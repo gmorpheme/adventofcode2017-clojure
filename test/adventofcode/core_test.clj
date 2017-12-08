@@ -76,3 +76,14 @@ cntj (57)")))
 
 (deftest test-day7b
   (is (= ["ugml" 60] (find-error (graph day7-test-input) "tknk"))))
+
+(def day8-test-input "b inc 5 if a > 1
+a inc 1 if b < 5
+c dec -10 if a >= 1
+c inc -20 if c == 10")
+
+(deftest test-day8a
+  (is (= (run-program (read-program day8-test-input)) {:a 1 :c -10})))
+
+(deftest test-day8b
+  (is (= (:max (run-program (instrument-program (read-program day8-test-input)))) 10)))
