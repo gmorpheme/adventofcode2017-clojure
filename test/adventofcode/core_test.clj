@@ -87,3 +87,35 @@ c inc -20 if c == 10")
 
 (deftest test-day8b
   (is (= (:max (run-program (instrument-program (read-program day8-test-input)))) 10)))
+
+(deftest test-day9a-counts
+  (are [text n] (= (group-count (run-parse group-nesting (clean-cancellations text))) n)
+    "{}" 1
+    "{{{}}}" 3
+    "{{},{}}" 3
+    "{{{},{},{{}}}}" 6
+    "{<{},{},{{}}>}" 1
+    "{<a>,<a>,<a>,<a>}" 1
+    "{{<a>},{<a>},{<a>},{<a>}}" 5
+    "{{<!>},{<!>},{<!>},{<a>}}" 2))
+
+(deftest test-day9a-scores
+  (are [text n] (= (group-score (run-parse group-nesting (clean-cancellations text))) n)
+    "{}" 1
+    "{{{}}}" 6
+    "{{},{}}" 5
+    "{{{},{},{{}}}}" 16
+    "{<{},{},{{}}>}" 1
+    "{{<ab>},{<ab>},{<ab>},{<ab>}}" 9
+    "{{<!!>},{<!!>},{<!!>},{<!!>}}" 9
+    "{{<a!>},{<a!>},{<a!>},{<ab>}}" 3))
+
+(deftest test-day9b
+  (are [text n] (= (run-parse (counted-garbage) (clean-cancellations text)) n)
+    "<>" 0
+    "<random characters>" 17
+    "<<<<>" 3
+    "<{!>}>" 2
+    "<!!>" 0
+    "<!!!>>" 0
+    "<{o\"i!a,<{i<a>" 10))

@@ -287,6 +287,8 @@
 (defn day7a-result []
   (first (day7a (day7-input))))
 
+(declare total-weight)
+
 (defn total-weight* [{:keys [name weight subprograms]} graph]
   (apply + weight (map #(total-weight (get graph %) graph) subprograms)))
 
@@ -354,6 +356,144 @@
 (defn day8b-result []
   (:max (run-program (instrument-program day8-program))))
 
+;;; Day 9
+
+(defn ch
+  "Parse and return any char"
+  [text]
+  (when-let [c (first text)] [c (rest text)]))
+
+(defn satisfying
+  "Call parser `p` but fail if the result doesn't satisfy predicate `f`"
+  [p f]
+  (fn [text]
+    (let [[r t] (p text)]
+      (when (f r) [r t]))))
+
+(defn lit
+  "Read and return the character `c` from the text"
+  [c]
+  (satisfying ch #(= % c)))
+
+(defn sq
+  "Parse each of `ps` in sequence, fail if any fail"
+  [& ps]
+  (fn [text]
+    (if (empty? ps)
+      [nil text]
+      (when-let [[r1 t1] ((first ps) text)]
+        (if (seq ps)
+          (when-let [[rs t2] ((apply sq (rest ps)) t1)]
+            [(cons r1 rs) t2])
+          [nil t1])))))
+
+(defn many
+  "Parse 0 or more times with `p`, returning list of results"
+  [p]
+  (fn [text]
+    (if-let [[r1 t1] (p text)]
+      (if-let [[rs t2] ((many p) t1)]
+        [(cons r1 rs) t2]
+        [(list r1) t1])
+      [nil text])))
+
+(defn alt
+  "Attempt to parse with `p1` but if that fails `p2`. Fail if both fail."
+  [p1 p2]
+  (fn [text]
+    (if-let [[r1 t1] (p1 text)]
+      [r1 t1]
+      (when-let [[r2 t2] (p2 text)]
+        [r2 t2]))))
+
+(defn opt
+  "Attempt parse with `p`, succeeding returning nil if `p` fails."
+  [p]
+  (fn [text]
+    (if-let [[r t] (p text)]
+      [r t]
+      [nil text])))
+
+(defn fmap
+  "Parse with `p` but map return with `f`"
+  [p f]
+  (fn [text]
+    (when-let [[r t] (p text)]
+      [(f r) t])))
+
+(defn eat
+  "Parse with `p` but return nil result"
+  [p]
+  (fmap p (constantly nil)))
+
+(defn sq>
+  "As per `sq` but return result of last parser, not the sequence."
+  [& ps]
+  (fmap (apply sq ps) last))
+
+(defn many-sep-by
+  "Parse a sequence of `p` separated by `sep`"
+  [sep p]
+  (opt (fmap
+        (sq p (many (sq> sep p)))
+        #(apply cons %))))
+
+;; deal with !s as preprocess
+
+(defn clean-cancellations [text]
+  (-> text
+      (str/replace #"!." "")
+      (str/trim-newline)))
+
+(defn run-parse [parser text]
+  (if-let [[result residue] (parser text)]
+    (if (empty? residue)
+      result
+      (throw (ex-info "Incomplete parse" {:residue residue})))
+    (throw (ex-info "Parse failure" {}))))
+
+;; 9a - parse into nested vector structure
+
+(def garbage (sq (lit \<) (many (satisfying ch #(not= % \>))) (lit \>)))
+
+(def eat-garbage (eat garbage))
+
+(declare group-nesting)
+
+(defn item [text] ((alt eat-garbage group-nesting) text))
+
+(def group-nesting (fmap (sq (lit \{) (many-sep-by (lit \,) item) (lit \}))
+                         (fn [[_ xs _]] (vec (remove nil? xs)))))
+
+;;; ...and functions to evaluate the structure
+
+(defn group-count [groups]
+  (inc (apply + (map group-count groups))))
+
+(defn group-score
+  ([groups]
+   (group-score 1 groups))
+  ([depth groups]
+   (+ depth (apply + (map (partial group-score (inc depth)) groups)))))
+
+(def day9-input (slurp (io/resource "day9.txt")))
+
+(defn day9a-result [] (group-score (run-parse group-nesting (clean-cancellations day9-input))))
+
+
+;; 9b - alter semantic actions to count garbage instead
+
+(defn counted-garbage [] (fmap garbage (fn [[_ cs _]] (count  cs))))
+
+(declare group-9b)
+
+(defn item-9b [text] ((alt (counted-garbage) (group-9b)) text))
+
+(defn group-9b [] (fmap (sq (lit \{) (many-sep-by (lit \,) item-9b) (lit \}))
+                      (fn [[_ xs _]] (apply + (remove nil? xs)))))
+
+(defn day9b-result [] (run-parse (group-9b) (clean-cancellations day9-input)))
+
 ;;; Main
 
 (defn -main []
@@ -372,4 +512,6 @@
   (println "Day 7 Part One:" (day7a-result))
   (println "Day 7 Part Two:" (day7b-result))
   (println "Day 8 Part One:" (day8a-result))
-  (println "Day 8 Part Two:" (day8b-result)))
+  (println "Day 8 Part Two:" (day8b-result))
+  (println "Day 9 Part One:" (day9a-result))
+  (println "Day 9 Part Two:" (day9b-result)))
