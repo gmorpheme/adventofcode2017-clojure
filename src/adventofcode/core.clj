@@ -494,6 +494,64 @@
 
 (defn day9b-result [] (run-parse (group-9b) (clean-cancellations day9-input)))
 
+;;; Day 10
+
+(defn reflect-indices [current length indices]
+  (let [m (count indices)
+        pivot (+ current (/ (dec length) 2))
+        reflect (fn [i]  (if (or (and (>= i current) (< i (+ current length)))
+                                (and (> (+ current length) m) (< i (mod (+ current length) m))))
+                          (mod (int (- pivot (- i pivot))) m)
+                          i))]
+    (map reflect indices)))
+
+(defn start-state [n]
+  {:indices (vec (range n))
+   :current 0
+   :skip 0})
+
+(defn step [{:keys [indices current skip]} length]
+  {:indices (reflect-indices current length indices)
+   :current (mod (+ current length skip) (count indices))
+   :skip (inc skip)})
+
+(defn as-list [indices]
+  (let [init (vec (repeat (count indices) 0))]
+    (->> (map-indexed vector indices)
+         (reduce (fn [v [n i]] (assoc v i n)) init))))
+
+(defn run-10a [n lengths]
+  (let [indices (:indices (reduce step (start-state n) lengths))]
+    (as-list indices)))
+
+(def day10-input [187 254 0 81 169 219 1 190 19 102 255 56 46 32 2 216])
+
+(defn day10a-result []
+  (let [[a b & cs] (run-10a 256 day10-input)]
+    (* a b)))
+
+(defn lengths-10b [s]
+  {:pre [(string? s)]}
+  (concat (seq (.getBytes s)) [17 31 73 47 23]))
+
+(defn sparse-to-dense [arr]
+  (->> (partition 16 arr)
+       (map (partial apply bit-xor))
+       (map (partial format "%02x"))
+       (apply str)))
+
+(defn run-10b [n s]
+  (let [lengths (lengths-10b s)
+        run-once (fn [state] (reduce step state lengths))
+        sparse (as-list (:indices (first (drop 64 (iterate run-once (start-state n))))))
+        dense (sparse-to-dense sparse)]
+    dense))
+
+(def day10b-input "187,254,0,81,169,219,1,190,19,102,255,56,46,32,2,216")
+
+(defn day10b-result []
+  (run-10b 256 day10b-input))
+
 ;;; Main
 
 (defn -main []
