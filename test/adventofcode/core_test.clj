@@ -49,10 +49,10 @@
     "oiii ioii iioi iiio" false))
 
 (deftest test-day5a
-  (is (= (run-day5 (atom [0 3 0 1 -3])) 5)))
+  (is (= (run-day5 (volatile! [0 3 0 1 -3])) 5)))
 
 (deftest test-day5b
-  (is (= (run-day5b (atom [0 3 0 1 -3])) 10)))
+  (is (= (run-day5b (volatile! [0 3 0 1 -3])) 10)))
 
 
 ;;; qq day6
@@ -126,3 +126,36 @@ c inc -20 if c == 10")
     "AoC 2017" "33efeb34ea91902bb2f59c9920caa6cd"
     "1,2,3" "3efbe78a8d82f29979031a4aa0b16a9d"
     "1,2,4" "63960835bcdc130f0b66d7ff4f6a5a8e"))
+
+(deftest test-day11a
+  (are [text step-count] (= (step-distance (find-destination (parse-moves text)))
+                            step-count)
+    "ne,ne,ne" 3
+    "ne,ne,sw,sw" 0
+    "ne,ne,s,s" 2
+    "se,sw,se,sw,sw" 3))
+
+(deftest test-day12a
+  (let [g (parse-graph (str/split-lines "0 <-> 2
+1 <-> 1
+2 <-> 0, 3, 4
+3 <-> 2, 4
+4 <-> 2, 3, 6
+5 <-> 6
+6 <-> 4, 5"))]
+    (is (= (count (component g 0)) 6))))
+
+(def day13a-test-input "0: 3
+1: 2
+4: 4
+6: 4")
+
+(deftest test-day13a
+  (let [depth-specs (parse-depth-specs day13a-test-input)
+        moduli (phase-modulus-specs depth-specs)]
+    (is (= (reduce + (severities 0 moduli)) 24))))
+
+(deftest test-day13b
+  (let [depth-specs (parse-depth-specs day13a-test-input)
+        moduli (phase-modulus-specs depth-specs)]
+    (is (= (find-delay moduli) 10))))

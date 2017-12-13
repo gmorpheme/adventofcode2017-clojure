@@ -18,7 +18,7 @@
        (map #(Integer/parseInt (str (first %))))
        (reduce +)))
 
-(defn day1-result []
+(defn day1a-result []
   (day1 day1-input))
 
 (defn day1b [value]
@@ -40,23 +40,8 @@
 ;;; Day 2
 
 
-(def day2-input "409	194	207	470	178	454	235	333	511	103	474	293	525	372	408	428
-4321	2786	6683	3921	265	262	6206	2207	5712	214	6750	2742	777	5297	3764	167
-3536	2675	1298	1069	175	145	706	2614	4067	4377	146	134	1930	3850	213	4151
-2169	1050	3705	2424	614	3253	222	3287	3340	2637	61	216	2894	247	3905	214
-99	797	80	683	789	92	736	318	103	153	749	631	626	367	110	805
-2922	1764	178	3420	3246	3456	73	2668	3518	1524	273	2237	228	1826	182	2312
-2304	2058	286	2258	1607	2492	2479	164	171	663	62	144	1195	116	2172	1839
-114	170	82	50	158	111	165	164	106	70	178	87	182	101	86	168
-121	110	51	122	92	146	13	53	34	112	44	160	56	93	82	98
-4682	642	397	5208	136	4766	180	1673	1263	4757	4680	141	4430	1098	188	1451
-158	712	1382	170	550	913	191	163	459	1197	1488	1337	900	1182	1018	337
-4232	236	3835	3847	3881	4180	4204	4030	220	1268	251	4739	246	3798	1885	3244
-169	1928	3305	167	194	3080	2164	192	3073	1848	426	2270	3572	3456	217	3269
-140	1005	2063	3048	3742	3361	117	93	2695	1529	120	3480	3061	150	3383	190
-489	732	57	75	61	797	266	593	324	475	733	737	113	68	267	141
-3858	202	1141	3458	2507	239	199	4400	3713	3980	4170	227	3968	1688	4352	4168
-")
+(defn day2-input []
+  (slurp (io/resource "day2.txt")))
 
 (defn row-seq
   "Convert string table into seq of seqs reprenting rows and cells"
@@ -73,8 +58,8 @@
                  top (apply max cells)]
              (- top bottom)))))
 
-(defn day2-result []
-  (day2 day2-input))
+(defn day2a-result []
+  (day2 (day2-input)))
 
 (defn line-divisor
   "For a set of cells identify the pair where one divides the other and
@@ -83,7 +68,7 @@
   (let [divisor (fn [vals]
                   (let [head (first vals)
                         tail (rest vals)
-                        multiples (filter #(= 0 (mod % head)) tail)]
+                        multiples (filter #(zero? (mod % head)) tail)]
                     (if (empty? multiples)
                       (recur tail)
                       (/ (first multiples) head))))]
@@ -94,7 +79,7 @@
   (apply + (map #(line-divisor (apply sorted-set %)) (row-seq value))))
 
 (defn day2b-result []
-  (day2b day2-input))
+  (day2b (day2-input)))
 
 
 ;;; Day 3
@@ -175,16 +160,16 @@
 (defn load-passphrases []
   (->> (str/split-lines (slurp (io/resource "day4.txt")))
        (map #(str/split % #"\s+"))
-       (filter #(not (empty? %)))))
+       (filter seq)))
 
 (defn valid-passphrase? [words]
   (= (count words) (count (apply hash-set words))))
 
-(defn day4-result []
+(defn day4a-result []
   (count (filter valid-passphrase? (load-passphrases))))
 
 (defn valid-passphrase-part2? [words]
-  (let [normalised (into #{} (map frequencies words))]
+  (let [normalised (set (map frequencies words))]
     (= (count words) (count normalised))))
 
 (defn day4b-result []
@@ -194,7 +179,7 @@
 
 (defn process [state index]
   (when-let [jump (get @state index)]
-    (swap! state update index inc)
+    (vswap! state update index inc)
     jump))
 
 (defn run-day5 [state]
@@ -209,12 +194,12 @@
        vec))
 
 (defn day5a-result []
-  (run-day5 (atom (load-instructions))))
+  (run-day5 (volatile! (load-instructions))))
 
 (defn process-b [state index]
   (when-let [jump (get @state index)]
     (let [delta (if (>= jump 3) -1 1)]
-      (swap! state update index #(+ % delta)))
+      (vswap! state update index #(+ % delta)))
     jump))
 
 (defn run-day5b [state]
@@ -224,7 +209,7 @@
       count)))
 
 (defn day5b-result []
-  (run-day5b (atom (load-instructions))))
+  (run-day5b (volatile! (load-instructions))))
 
 ;;; Day 6
 
@@ -246,7 +231,7 @@
 (defn run-reallocate
   [mem]
   (->> (iterate reallocate mem)                        ; memory arrangements
-       (reductions #(conj %1 %2) #{})                  ; arrangements seen at each step
+       (reductions conj #{})                           ; arrangements seen at each step
        (map-indexed (fn [idx seen] [idx (count seen)])) ; cardinality of seen against index
        (drop-while (fn [[idx count]] (= idx count)))    ; points where the runtim exceeds cardinality
        (first)                                         ; first time we don't increase seen set
@@ -265,8 +250,8 @@
 
 (defn parse-line [line]
   (let [re #"^(\w+)\s+\((\d+)\)(?:\s+->\s+(.*))?$"]
-    (when-let [matches (re-seq re line)]
-      (when-let [[name weight suffix] (rest (first matches))]
+    (when-let [matches (re-matches re line)]
+      (when-let [[name weight suffix] (rest matches)]
         {:name name
          :weight (Integer/parseInt weight)
          :subprograms (when-not (str/blank? suffix) (str/split suffix #",\s+"))}))))
@@ -277,8 +262,8 @@
        (keep identity)))
 
 (defn day7a [input]
-  (let [programs (into #{} (map :name input))
-        subprograms (into #{} (apply concat (map :subprograms input)))]
+  (let [programs (set (map :name input))
+        subprograms (set (mapcat :subprograms input))]
     (set/difference programs subprograms)))
 
 (defn graph [input]
@@ -327,7 +312,7 @@
           (arg [s] (Integer/parseInt s))
           (instruction [c g] #(if (g %) (c %) %))]
     (let [re #"^(\w+)\s+(\w+)\s+(-?\d+)\s+if\s+(\w+)\s+(\S+)\s+(-?\d+)$"
-          gs (rest (first (re-seq re line)))]
+          gs (rest (re-matches re line))]
       (instruction (command (reg (nth gs 0))
                             (function (nth gs 1) (arg (nth gs 2))))
                    (guard (reg (nth gs 3))
@@ -335,7 +320,7 @@
                           (arg (nth gs 5)))))))
 
 (defn read-program [s]
-  (->> (str/split-lines s) (map parse-instruction)))
+  (map parse-instruction (str/split-lines s)))
 
 (def day8-program (read-program (slurp (io/resource "day8.txt"))))
 
@@ -552,16 +537,156 @@
 (defn day10b-result []
   (run-10b 256 day10b-input))
 
+
+;;; Day 11
+
+(defn offset [move]
+  (case move
+    :s [0 -2]
+    :se [1 -1]
+    :sw [-1 -1]
+    :n [0 2]
+    :ne [1 1]
+    :nw [-1 1]))
+
+(defn parse-moves [text]
+  (map (comp keyword str/trim) (str/split text #",")))
+
+(defn move [[x y] [dx dy]]
+  [(+ x dx) (+ y dy)])
+
+(defn find-path [moves]
+  (reductions move (map offset moves)))
+
+(defn find-destination [moves]
+  (last (find-path moves)))
+
+(defn choose-next [[rem-x rem-y]]
+  (cond
+    (pos? rem-x) (if (pos? rem-y) :ne :se)
+    (neg? rem-x) (if (pos? rem-y) :nw :sw)
+    (zero? rem-x) (if (pos? rem-y) :n :s)))
+
+(defn step-distance [[x y]]
+  (let [abs-x (Math/abs x)
+        abs-y (Math/abs y)]
+    (if (> abs-x abs-y)
+      (+ (- abs-x abs-y) abs-y)
+      (/ (+ abs-x abs-y) 2))))
+
+(defn day11-input []
+  (parse-moves (slurp (io/resource "day11.txt"))))
+
+(defn day11a-result []
+  (step-distance (find-destination (day11-input))))
+
+(defn day11b-result []
+  (reduce max (map step-distance (find-path (day11-input)))))
+
+;;; Day 12
+
+(defn prune-explored [explored todo]
+  (->> (reverse todo)
+       (drop-while explored)
+       (reverse)))
+
+(defn component [g item]
+  (loop [explored #{} todo [item]]
+    (if-let [todo (seq (prune-explored explored todo))]
+      (let [node (last todo)
+            children (set (g node))
+            unexplored (set/difference children explored)
+            todo+ (vec (concat (butlast todo) unexplored))]
+        (recur (conj explored node) todo+))
+      explored)))
+
+(defn parse-graph [lines]
+  (into {} (for [line lines]
+             (let [[src suffix] (rest (re-matches #"(\d+) <-> (.*)" line))
+                   connections (map str/trim (str/split suffix #","))]
+               [(Integer/parseInt src) (map #(Integer/parseInt %) connections)]))))
+
+(defn day12-input []
+  (str/split-lines (slurp (io/resource "day12.txt"))))
+
+(defn day12a-result []
+  (count (component (parse-graph (day12-input)) 0)))
+
+(defn all-components [g]
+  (loop [components #{} ks (keys g)]
+    (if (seq ks)
+      (let [[k & ks'] ks]
+        (if (and (seq components) ((apply some-fn components) k))
+          (recur components ks')
+          (recur (conj components (component g k)) ks')))
+      components)))
+
+(defn day12b-result []
+  (count (all-components (parse-graph (day12-input)))))
+
+;;; Day 13
+
+(defn phase-modulus [depth]
+  {:pre [(pos? depth)]}
+  (- (* 2 depth) 2))
+
+(defn depth [phase-modulus]
+  {:pre [(pos? phase-modulus)]}
+  (/ (+ phase-modulus 2) 2))
+
+(defn severity [layer phase-modulus]
+  {:pre [(pos? phase-modulus) (not (neg? layer))]}
+  (* layer (depth phase-modulus)))
+
+(defn caught [picosecond phase-modulus]
+  {:pre [(pos? phase-modulus)]}
+  (zero? (mod picosecond phase-modulus)))
+
+(defn severities [delay phase-modulus-map]
+  (map
+   (fn [[layer phase-modulus]]
+     (if (caught (+ delay layer) phase-modulus)
+       (severity layer phase-modulus)
+       0))
+   phase-modulus-map))
+
+(defn day13-input []
+  (slurp (io/resource "day13.txt")))
+
+(defn parse-depth-specs [text]
+  (for [line (str/split-lines text)]
+    (let [[_ index depth] (re-matches #"(\d+): (\d+)" line)]
+      [(Integer/parseInt index) (Integer/parseInt depth)])))
+
+(defn phase-modulus-specs [depth-specs]
+  (map (fn [[k v]] [k (phase-modulus v)]) depth-specs))
+
+(defn day13a-result []
+  (let [specs (phase-modulus-specs (parse-depth-specs (day13-input)))]
+    (reduce + (severities 0 specs))))
+
+(defn uncaught [d phase-modulus-specs]
+  (every? (fn [[i m]] (not (zero? (mod (+ d i) m)))) phase-modulus-specs))
+
+(defn find-delay [phase-modulus-specs]
+  (first (filter #(uncaught % phase-modulus-specs) (range))))
+
+(defn day13b-result []
+  ;; NB there is some redundancy in the specs, sorting by modulus puts
+  ;; the tighter constraints first to aid shortcutting
+  (let [specs (sort-by second (phase-modulus-specs (parse-depth-specs (day13-input))))]
+    (find-delay specs)))
+
 ;;; Main
 
 (defn -main []
-  (println "Day 1 Part One:" (day1-result))
+  (println "Day 1 Part One:" (day1a-result))
   (println "Day 1 Part Two:" (day1b-result))
-  (println "Day 2 Part One:" (day2-result))
+  (println "Day 2 Part One:" (day2a-result))
   (println "Day 2 Part Two:" (day2b-result))
   (println "Day 3 Part One:" (day3a-result))
   (println "Day 3 Part Two:" (day3b-result))
-  (println "Day 4 Part One:" (day4-result))
+  (println "Day 4 Part One:" (day4a-result))
   (println "Day 4 Part Two:" (day4b-result))
   (println "Day 5 Part One:" (day5a-result))
   (println "Day 5 Part Two:" (day5b-result))
@@ -572,4 +697,12 @@
   (println "Day 8 Part One:" (day8a-result))
   (println "Day 8 Part Two:" (day8b-result))
   (println "Day 9 Part One:" (day9a-result))
-  (println "Day 9 Part Two:" (day9b-result)))
+  (println "Day 9 Part Two:" (day9b-result))
+  (println "Day 10 Part One:" (day10a-result))
+  (println "Day 10 Part Two:" (day10b-result))
+  (println "Day 11 Part One:" (day11a-result))
+  (println "Day 11 Part Two:" (day11b-result))
+  (println "Day 12 Part One:" (day12a-result))
+  (println "Day 12 Part Two:" (day12b-result))
+  (println "Day 13 Part One:" (day13a-result))
+  (println "Day 13 Part Two:" (day13b-result)))
