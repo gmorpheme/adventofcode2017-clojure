@@ -3,9 +3,23 @@
             [clojure.java.io :as io]
             [clojure.set :as set]))
 
-;;; Day 2
+;;; Prologue
+
+;;; Common requirements get refactored up to here when they're needed
+;;; repeatedly. Avoiding all deps apart from pure Clojure 1.9 for
+;;; this.
+
+(defn input-text
+  "Read input for a day from resources"
+  [day]
+  (slurp (io/resource (str "day" day ".txt"))))
+
+;;; Day 1
 
 (def day1-input "29917128875332952564321392569634257121244516819997569284938677239676779378822158323549832814412597817651244117851771257438674567254146559419528411463781241159837576747416543451994579655175322397355255587935456185669334559882554936642122347526466965746273596321419312386992922582836979771421518356285534285825212798113159911272923448284681544657616654285632235958355867722479252256292311384799669645293812691169936746744856227797779513997329663235176153745581296191298956836998758194274865327383988992499115472925731787228592624911829221985925935268785757854569131538763133427434848767475989173579655375125972435359317237712667658828722623837448758528395981635746922144957695238318954845799697142491972626942976788997427135797297649149849739186827185775786254552866371729489943881272817466129271912247236569141713377483469323737384967871876982476485658337183881519295728697121462266226452265259877781881868585356333494916519693683238733823362353424927852348119426673294798416314637799636344448941782774113142925315947664869341363354235389597893211532745789957591898692253157726576488811769461354938575527273474399545366389515353657644736458182565245181653996192644851687269744491856672563885457872883368415631469696994757636288575816146927747179133188841148212825453859269643736199836818121559198563122442483528316837885842696283932779475955796132242682934853291737434482287486978566652161245555856779844813283979453489221189332412315117573259531352875384444264457373153263878999332444178577127433891164266387721116357278222665798584824336957648454426665495982221179382794158366894875864761266695773155813823291684611617853255857774422185987921219618596814446229556938354417164971795294741898631698578989231245376826359179266783767935932788845143542293569863998773276365886375624694329228686284863341465994571635379257258559894197638117333711626435669415976255967412994139131385751822134927578932521461677534945328228131973291962134523589491173343648964449149716696761218423314765168285342711137126239639867897341514131244859826663281981251614843274762372382114258543828157464392")
+
+;;; Use some partition and apply magic to consider each overlapping
+;;; pair one by one
 
 (defn day1 [value]
   {:pre [(string? value)]
@@ -20,6 +34,9 @@
 
 (defn day1a-result []
   (day1 day1-input))
+
+;;; This time we need to zip together the sequence with an offset of
+;;; itself. Some transducers just for fun...
 
 (defn day1b [value]
   {:pre [(string? value) (even? (count value))]
@@ -39,10 +56,6 @@
 
 ;;; Day 2
 
-
-(defn day2-input []
-  (slurp (io/resource "day2.txt")))
-
 (defn row-seq
   "Convert string table into seq of seqs reprenting rows and cells"
   [value]
@@ -59,7 +72,7 @@
              (- top bottom)))))
 
 (defn day2a-result []
-  (day2 (day2-input)))
+  (day2 (input-text 2)))
 
 (defn line-divisor
   "For a set of cells identify the pair where one divides the other and
@@ -79,10 +92,13 @@
   (apply + (map #(line-divisor (apply sorted-set %)) (row-seq value))))
 
 (defn day2b-result []
-  (day2b (day2-input)))
+  (day2b (input-text 2)))
 
 
 ;;; Day 3
+
+;;; Part a - do some arithmetic to work out which "ring" the target
+;;; belongs in then just walk around the ring to find it
 
 (defn ring-index
   "Work out which ring a value is in"
@@ -117,17 +133,21 @@
         [x y] (first (drop ring-item (ring-seq index)))]
     (+ (int (Math/abs x)) (int (Math/abs y)))))
 
-(def day3a cell-distance)
-
 (defn day3a-result []
-  (day3a 368078))
+  (cell-distance 368078))
 
-(defn spiral-coords []
+;;; Part b - simulate
+
+(defn spiral-coords
+  "Lazy sequence of co-ordinates spiralling out from the origin"
+  []
   (for [ring (range)
         c (ring-seq ring)]
     c))
 
-(defn neighbours [[x y]]
+(defn neighbours
+  "Return the neighbours of the specified cell"
+  [[x y]]
   (for [[dx dy] [[-1  1] [0  1] [1  1]
                  [-1  0]        [1  0]
                  [-1 -1] [0 -1] [1 -1]]]
@@ -135,7 +155,7 @@
 
 (defn allocate
   "From pair of map a last calculated value, produce pair of map with
-  next cell filled and the value villed in"
+  next cell filled and the value that was filled in"
   [[grid-map last-val] coordinate]
   (if (= coordinate [0 0])
     [{coordinate 1} 1]
@@ -143,7 +163,9 @@
           total (apply + nvals)]
       [(assoc grid-map coordinate total) total])))
 
-(defn allocations []
+(defn allocations
+  "The sequence of states of the grid and values calculated."
+  []
   (drop 1 (reductions allocate [{} 0] (spiral-coords))))
 
 (defn cell-values []
@@ -157,8 +179,10 @@
 
 ;;; Day 4
 
+;;; Just populate set of normalised word and count the normalisations
+
 (defn load-passphrases []
-  (->> (str/split-lines (slurp (io/resource "day4.txt")))
+  (->> (str/split-lines (input-text 4))
        (map #(str/split % #"\s+"))
        (filter seq)))
 
@@ -177,6 +201,8 @@
 
 ;;; Day 5
 
+;;; Uses explicit state. Also really slow.
+
 (defn process [state index]
   (when-let [jump (get @state index)]
     (vswap! state update index inc)
@@ -189,7 +215,7 @@
       count)))
 
 (defn load-instructions []
-  (->> (str/split-lines (slurp (io/resource "day5.txt")))
+  (->> (str/split-lines (input-text 5))
        (map #(Integer/parseInt %))
        vec))
 
@@ -214,28 +240,29 @@
 ;;; Day 6
 
 (defn max-index
-  [mem]
-  (let [m (apply max mem)]
-    (.indexOf mem m)))
+  "Find the bank with the most blocks"
+  [banks]
+  (let [m (apply max banks)]
+    (.indexOf banks m)))
 
 (defn reallocate
   "Do a single reallocation; find largest bank and distribute"
-  [mem]
-  {:pre [(vector? mem)]}
-  (let [bank (max-index mem)
-        blocks (get mem bank)
-        mem (assoc-in mem [bank] 0)
-        target-indices (take blocks (drop (inc bank) (cycle (range (count mem)))))]
-    (reduce #(update-in %1 [%2] inc) mem target-indices)))
+  [banks]
+  {:pre [(vector? banks)]}
+  (let [bank (max-index banks)
+        blocks (get banks bank)
+        banks (assoc banks bank 0)
+        target-indices (take blocks (drop (inc bank) (cycle (range (count banks)))))]
+    (reduce #(update %1 %2 inc) banks target-indices)))
 
 (defn run-reallocate
-  [mem]
-  (->> (iterate reallocate mem)                        ; memory arrangements
-       (reductions conj #{})                           ; arrangements seen at each step
-       (map-indexed (fn [idx seen] [idx (count seen)])) ; cardinality of seen against index
-       (drop-while (fn [[idx count]] (= idx count)))    ; points where the runtim exceeds cardinality
-       (first)                                         ; first time we don't increase seen set
-       (second)))                                      ; size of set = ; no reallocations
+  [banks]
+  (->> (iterate reallocate banks)                      ; successive memory arrangements
+       (reductions conj #{})                           ; total set of arrangements seen at each step
+       (map-indexed (fn [idx seen] [idx (count seen)])) ; cardinality of seen-set for each time
+       (drop-while (fn [[idx count]] (= idx count)))    ; skip to times where the runtime exceeds cardinality
+       (first)                                         ; first time we don't increase seen-set by reallocating
+       (second)))                                      ; size of the set
 
 (def day6-input [4 10 4 1 8 4 9 14 5 1 14 15 0 15 3 5])
 
@@ -243,10 +270,12 @@
   (run-reallocate day6-input))
 
 (defn day6b-result []
-  (let [state (first (drop (day6a-result) (iterate reallocate day6-input )))]
+  (let [state (nth (iterate reallocate day6-input) (day6a-result))]
     (run-reallocate state)))
 
 ;;; Day 7
+
+;;; Part a is just set difference of programs and subprograms
 
 (defn parse-line [line]
   (let [re #"^(\w+)\s+\((\d+)\)(?:\s+->\s+(.*))?$"]
@@ -257,7 +286,7 @@
          :subprograms (when-not (str/blank? suffix) (str/split suffix #",\s+"))}))))
 
 (defn day7-input []
-  (->> (str/split-lines (slurp (io/resource "day7.txt")))
+  (->> (str/split-lines (input-text 7))
        (map parse-line)
        (keep identity)))
 
@@ -266,11 +295,17 @@
         subprograms (set (mapcat :subprograms input))]
     (set/difference programs subprograms)))
 
-(defn graph [input]
-  (into {} (map (fn [x] [(:name x) x]) input)))
+;;; Part b - memoized recursion to deliver total weight of any
+;;; program, then search for subprograms that don't balance and go as
+;;; deep as possible to find the appropriate place to correct
 
 (defn day7a-result []
   (first (day7a (day7-input))))
+
+(defn graph
+  "Index by name of program"
+  [input]
+  (into {} (map (fn [x] [(:name x) x]) input)))
 
 (declare total-weight)
 
@@ -302,6 +337,9 @@
 
 ;;; Day 8
 
+;;; Part a - micro DSL to parse the instructions into "command"
+;;; functions which can be run against a map "environment"
+
 (defn parse-instruction
   [line]
   (letfn [(reg [s] (keyword s))
@@ -322,13 +360,16 @@
 (defn read-program [s]
   (map parse-instruction (str/split-lines s)))
 
-(def day8-program (read-program (slurp (io/resource "day8.txt"))))
+(def day8-program (read-program (input-text 8)))
 
 (defn run-program [instructions]
   (reduce #(%2 %1) {} instructions))
 
 (defn day8a-result []
   (apply max (vals (run-program day8-program))))
+
+;;; Part b - just patch each instruction to keep a :max key in the
+;;; environment and run again
 
 (defn instrumented [x]
   #(let [state (x %)
@@ -342,6 +383,9 @@
   (:max (run-program (instrument-program day8-program))))
 
 ;;; Day 9
+
+;;; Implement a few parser combinator primitives - they may come in
+;;; handy through the month...
 
 (defn ch
   "Parse and return any char"
@@ -423,19 +467,19 @@
         (sq p (many (sq> sep p)))
         #(apply cons %))))
 
-;; deal with !s as preprocess
-
-(defn clean-cancellations [text]
-  (-> text
-      (str/replace #"!." "")
-      (str/trim-newline)))
-
 (defn run-parse [parser text]
   (if-let [[result residue] (parser text)]
     (if (empty? residue)
       result
       (throw (ex-info "Incomplete parse" {:residue residue})))
     (throw (ex-info "Parse failure" {}))))
+
+;; deal with !s as preprocess
+
+(defn clean-cancellations [text]
+  (-> text
+      (str/replace #"!." "")
+      (str/trim-newline)))
 
 ;; 9a - parse into nested vector structure
 
@@ -461,7 +505,7 @@
   ([depth groups]
    (+ depth (apply + (map (partial group-score (inc depth)) groups)))))
 
-(def day9-input (slurp (io/resource "day9.txt")))
+(def day9-input (input-text 9))
 
 (defn day9a-result [] (group-score (run-parse group-nesting (clean-cancellations day9-input))))
 
@@ -480,6 +524,13 @@
 (defn day9b-result [] (run-parse (group-9b) (clean-cancellations day9-input)))
 
 ;;; Day 10
+
+;;; Rather than maintaining an array of values and copying them around
+;;; to reverse chunks, let's use a little trick and keep instead an
+;;; array where the contents of the ith index describe where i should
+;;; appear in the real array. Then moving things around becomes a case
+;;; of doing some arithmetic on the array items rather than copying
+;;; around.
 
 (defn reflect-indices [current length indices]
   (let [m (count indices)
@@ -537,8 +588,13 @@
 (defn day10b-result []
   (run-10b 256 day10b-input))
 
-
 ;;; Day 11
+
+;;; Represent items in the hex grid as the squares in a normal grid
+;;; for which both items are even or both are odd. Then distances can
+;;; be calculated using arithmetic. Need to be careful to account for
+;;; the fact that movement east-west is slower than north-south, i.e.
+;;; [0 0] to [0 2] is two moves, [0 0] to [0 2] is one move.
 
 (defn offset [move]
   (case move
@@ -575,7 +631,7 @@
       (/ (+ abs-x abs-y) 2))))
 
 (defn day11-input []
-  (parse-moves (slurp (io/resource "day11.txt"))))
+  (parse-moves (input-text 11)))
 
 (defn day11a-result []
   (step-distance (find-destination (day11-input))))
@@ -584,6 +640,8 @@
   (reduce max (map step-distance (find-path (day11-input)))))
 
 ;;; Day 12
+
+;;; Boooorrring....! DFS for connected components
 
 (defn prune-explored [explored todo]
   (->> (reverse todo)
@@ -607,7 +665,7 @@
                [(Integer/parseInt src) (map #(Integer/parseInt %) connections)]))))
 
 (defn day12-input []
-  (str/split-lines (slurp (io/resource "day12.txt"))))
+  (str/split-lines (input-text 12)))
 
 (defn day12a-result []
   (count (component (parse-graph (day12-input)) 0)))
@@ -625,6 +683,11 @@
   (count (all-components (parse-graph (day12-input)))))
 
 ;;; Day 13
+
+;;; Movement back and forth in a column of n can be represented as
+;;; cycling through a "phase space" of 2n - 2 (where each location
+;;; represents both position and direction in the original column.
+;;; Everything then becomes pretty straightforward modular arithmetic.
 
 (defn phase-modulus [depth]
   {:pre [(pos? depth)]}
@@ -650,9 +713,6 @@
        0))
    phase-modulus-map))
 
-(defn day13-input []
-  (slurp (io/resource "day13.txt")))
-
 (defn parse-depth-specs [text]
   (for [line (str/split-lines text)]
     (let [[_ index depth] (re-matches #"(\d+): (\d+)" line)]
@@ -662,7 +722,7 @@
   (map (fn [[k v]] [k (phase-modulus v)]) depth-specs))
 
 (defn day13a-result []
-  (let [specs (phase-modulus-specs (parse-depth-specs (day13-input)))]
+  (let [specs (phase-modulus-specs (parse-depth-specs (input-text 13)))]
     (reduce + (severities 0 specs))))
 
 (defn uncaught [d phase-modulus-specs]
@@ -674,35 +734,14 @@
 (defn day13b-result []
   ;; NB there is some redundancy in the specs, sorting by modulus puts
   ;; the tighter constraints first to aid shortcutting
-  (let [specs (sort-by second (phase-modulus-specs (parse-depth-specs (day13-input))))]
+  (let [specs (sort-by second (phase-modulus-specs (parse-depth-specs (input-text 13))))]
     (find-delay specs)))
 
 ;;; Main
 
 (defn -main []
-  (println "Day 1 Part One:" (day1a-result))
-  (println "Day 1 Part Two:" (day1b-result))
-  (println "Day 2 Part One:" (day2a-result))
-  (println "Day 2 Part Two:" (day2b-result))
-  (println "Day 3 Part One:" (day3a-result))
-  (println "Day 3 Part Two:" (day3b-result))
-  (println "Day 4 Part One:" (day4a-result))
-  (println "Day 4 Part Two:" (day4b-result))
-  (println "Day 5 Part One:" (day5a-result))
-  (println "Day 5 Part Two:" (day5b-result))
-  (println "Day 6 Part One:" (day6a-result))
-  (println "Day 6 Part Two:" (day6b-result))
-  (println "Day 7 Part One:" (day7a-result))
-  (println "Day 7 Part Two:" (day7b-result))
-  (println "Day 8 Part One:" (day8a-result))
-  (println "Day 8 Part Two:" (day8b-result))
-  (println "Day 9 Part One:" (day9a-result))
-  (println "Day 9 Part Two:" (day9b-result))
-  (println "Day 10 Part One:" (day10a-result))
-  (println "Day 10 Part Two:" (day10b-result))
-  (println "Day 11 Part One:" (day11a-result))
-  (println "Day 11 Part Two:" (day11b-result))
-  (println "Day 12 Part One:" (day12a-result))
-  (println "Day 12 Part Two:" (day12b-result))
-  (println "Day 13 Part One:" (day13a-result))
-  (println "Day 13 Part Two:" (day13b-result)))
+  (doseq [day (range 1 26)]
+    (when-let [a (resolve (symbol (str "day" day "a-result")))]
+      (println "Day" day "part a:" (a)))
+    (when-let [b (resolve (symbol (str "day" day "b-result")))]
+      (println "Day" day "part b:" (b)))))

@@ -25,7 +25,7 @@
   (is (= (day2b "5 9 2 8\n9 4 7 3\n3 8 6 5") 9)))
 
 (deftest test-day3a
-  (are [x y] (= (day3a x) y)
+  (are [x y] (= (cell-distance x) y)
     1 0
     12 3
     23 2
