@@ -121,7 +121,7 @@ c inc -20 if c == 10")
     "<{o\"i!a,<{i<a>" 10))
 
 (deftest test-day10b
-  (are [text hash] (= (run-10b 256 text) hash)
+  (are [text hash] (= (knot-hash 256 text) hash)
     "" "a2582a3a0e66e6e86e3812dcb672a272"
     "AoC 2017" "33efeb34ea91902bb2f59c9920caa6cd"
     "1,2,3" "3efbe78a8d82f29979031a4aa0b16a9d"
@@ -159,3 +159,24 @@ c inc -20 if c == 10")
   (let [depth-specs (parse-depth-specs day13a-test-input)
         moduli (phase-modulus-specs depth-specs)]
     (is (= (find-delay moduli) 10))))
+
+(def day14a-expected (-> "##.#.#..
+.#.#.#.#
+....#.#.
+#.#.##.#
+.##.#...
+##..#..#
+.#...#..
+##.#.##."
+                         (str/replace #"#" "1")
+                         (str/replace #"\." "0")
+                         (str/split-lines)))
+
+(deftest test-day14a
+  (let [subsquare (mapv #(apply str %) (take 8 (map (partial take 8) (map hash-bits (row-hashes "flqrgnkx")))))]
+    (is (= subsquare day14a-expected))))
+
+(deftest test-day14b
+  (let [bitrows (vec (map vec (map hash-bits (row-hashes "flqrgnkx"))))
+        regions (all-components (partial used-neighbours bitrows) (used-cells bitrows))]
+    (is (= (count regions) 1242))))

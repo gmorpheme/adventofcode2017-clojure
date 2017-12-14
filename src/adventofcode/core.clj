@@ -1,13 +1,14 @@
 (ns adventofcode.core
+  "Clojure adventofcode.com solutions"
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
             [clojure.set :as set]))
 
 ;;; Prologue
 
-;;; Common requirements get refactored up to here when they're needed
-;;; repeatedly. Avoiding all deps apart from pure Clojure 1.9 for
-;;; this.
+;; Common requirements get refactored up to here when they're needed
+;; repeatedly. Avoiding all deps apart from pure Clojure 1.9 for
+;; this.
 
 (defn input-text
   "Read input for a day from resources"
@@ -18,8 +19,8 @@
 
 (def day1-input "29917128875332952564321392569634257121244516819997569284938677239676779378822158323549832814412597817651244117851771257438674567254146559419528411463781241159837576747416543451994579655175322397355255587935456185669334559882554936642122347526466965746273596321419312386992922582836979771421518356285534285825212798113159911272923448284681544657616654285632235958355867722479252256292311384799669645293812691169936746744856227797779513997329663235176153745581296191298956836998758194274865327383988992499115472925731787228592624911829221985925935268785757854569131538763133427434848767475989173579655375125972435359317237712667658828722623837448758528395981635746922144957695238318954845799697142491972626942976788997427135797297649149849739186827185775786254552866371729489943881272817466129271912247236569141713377483469323737384967871876982476485658337183881519295728697121462266226452265259877781881868585356333494916519693683238733823362353424927852348119426673294798416314637799636344448941782774113142925315947664869341363354235389597893211532745789957591898692253157726576488811769461354938575527273474399545366389515353657644736458182565245181653996192644851687269744491856672563885457872883368415631469696994757636288575816146927747179133188841148212825453859269643736199836818121559198563122442483528316837885842696283932779475955796132242682934853291737434482287486978566652161245555856779844813283979453489221189332412315117573259531352875384444264457373153263878999332444178577127433891164266387721116357278222665798584824336957648454426665495982221179382794158366894875864761266695773155813823291684611617853255857774422185987921219618596814446229556938354417164971795294741898631698578989231245376826359179266783767935932788845143542293569863998773276365886375624694329228686284863341465994571635379257258559894197638117333711626435669415976255967412994139131385751822134927578932521461677534945328228131973291962134523589491173343648964449149716696761218423314765168285342711137126239639867897341514131244859826663281981251614843274762372382114258543828157464392")
 
-;;; Use some partition and apply magic to consider each overlapping
-;;; pair one by one
+;; Use some partition and apply magic to consider each overlapping
+;; pair one by one
 
 (defn day1 [value]
   {:pre [(string? value)]
@@ -35,8 +36,8 @@
 (defn day1a-result []
   (day1 day1-input))
 
-;;; This time we need to zip together the sequence with an offset of
-;;; itself. Some transducers just for fun...
+;; This time we need to zip together the sequence with an offset of
+;; itself. Some transducers just for fun...
 
 (defn day1b [value]
   {:pre [(string? value) (even? (count value))]
@@ -97,8 +98,8 @@
 
 ;;; Day 3
 
-;;; Part a - do some arithmetic to work out which "ring" the target
-;;; belongs in then just walk around the ring to find it
+;; Part a - do some arithmetic to work out which "ring" the target
+;; belongs in then just walk around the ring to find it
 
 (defn ring-index
   "Work out which ring a value is in"
@@ -179,7 +180,7 @@
 
 ;;; Day 4
 
-;;; Just populate set of normalised word and count the normalisations
+;; Just populate set of normalised word and count the normalisations
 
 (defn load-passphrases []
   (->> (str/split-lines (input-text 4))
@@ -201,7 +202,7 @@
 
 ;;; Day 5
 
-;;; Uses explicit state. Also really slow.
+;; Uses explicit state. Also really slow.
 
 (defn process [state index]
   (when-let [jump (get @state index)]
@@ -275,7 +276,7 @@
 
 ;;; Day 7
 
-;;; Part a is just set difference of programs and subprograms
+;; Part a is just set difference of programs and subprograms
 
 (defn parse-line [line]
   (let [re #"^(\w+)\s+\((\d+)\)(?:\s+->\s+(.*))?$"]
@@ -295,9 +296,9 @@
         subprograms (set (mapcat :subprograms input))]
     (set/difference programs subprograms)))
 
-;;; Part b - memoized recursion to deliver total weight of any
-;;; program, then search for subprograms that don't balance and go as
-;;; deep as possible to find the appropriate place to correct
+;; Part b - memoized recursion to deliver total weight of any
+;; program, then search for subprograms that don't balance and go as
+;; deep as possible to find the appropriate place to correct
 
 (defn day7a-result []
   (first (day7a (day7-input))))
@@ -337,8 +338,8 @@
 
 ;;; Day 8
 
-;;; Part a - micro DSL to parse the instructions into "command"
-;;; functions which can be run against a map "environment"
+;; Part a - micro DSL to parse the instructions into "command"
+;; functions which can be run against a map "environment"
 
 (defn parse-instruction
   [line]
@@ -368,8 +369,8 @@
 (defn day8a-result []
   (apply max (vals (run-program day8-program))))
 
-;;; Part b - just patch each instruction to keep a :max key in the
-;;; environment and run again
+;; Part b - just patch each instruction to keep a :max key in the
+;; environment and run again
 
 (defn instrumented [x]
   #(let [state (x %)
@@ -384,8 +385,8 @@
 
 ;;; Day 9
 
-;;; Implement a few parser combinator primitives - they may come in
-;;; handy through the month...
+;; Implement a few parser combinator primitives - they may come in
+;; handy through the month...
 
 (defn ch
   "Parse and return any char"
@@ -494,7 +495,7 @@
 (def group-nesting (fmap (sq (lit \{) (many-sep-by (lit \,) item) (lit \}))
                          (fn [[_ xs _]] (vec (remove nil? xs)))))
 
-;;; ...and functions to evaluate the structure
+;; ...and functions to evaluate the structure
 
 (defn group-count [groups]
   (inc (apply + (map group-count groups))))
@@ -525,12 +526,12 @@
 
 ;;; Day 10
 
-;;; Rather than maintaining an array of values and copying them around
-;;; to reverse chunks, let's use a little trick and keep instead an
-;;; array where the contents of the ith index describe where i should
-;;; appear in the real array. Then moving things around becomes a case
-;;; of doing some arithmetic on the array items rather than copying
-;;; around.
+;; Rather than maintaining an array of values and copying them around
+;; to reverse chunks, let's use a little trick and keep instead an
+;; array where the contents of the ith index describe where i should
+;; appear in the real array. Then moving things around becomes a case
+;; of doing some arithmetic on the array items rather than copying
+;; around.
 
 (defn reflect-indices [current length indices]
   (let [m (count indices)
@@ -576,25 +577,29 @@
        (map (partial format "%02x"))
        (apply str)))
 
-(defn run-10b [n s]
-  (let [lengths (lengths-10b s)
-        run-once (fn [state] (reduce step state lengths))
-        sparse (as-list (:indices (first (drop 64 (iterate run-once (start-state n))))))
-        dense (sparse-to-dense sparse)]
-    dense))
+(defn knot-hash
+  "`n` is size of knotting array, `s` is string to hash"
+  ([n s]
+   (let [lengths (lengths-10b s)
+         run-once (fn [state] (reduce step state lengths))
+         sparse (as-list (:indices (first (drop 64 (iterate run-once (start-state n))))))
+         dense (sparse-to-dense sparse)]
+     dense))
+  ([s] (knot-hash 256 s)))
 
 (def day10b-input "187,254,0,81,169,219,1,190,19,102,255,56,46,32,2,216")
 
 (defn day10b-result []
-  (run-10b 256 day10b-input))
+  (knot-hash 256 day10b-input))
 
 ;;; Day 11
 
-;;; Represent items in the hex grid as the squares in a normal grid
-;;; for which both items are even or both are odd. Then distances can
-;;; be calculated using arithmetic. Need to be careful to account for
-;;; the fact that movement east-west is slower than north-south, i.e.
-;;; [0 0] to [0 2] is two moves, [0 0] to [0 2] is one move.
+;; Represent items in the hex grid as the squares in a normal grid for
+;; which both co-ordinates are even or both are odd. Then distances
+;; can be calculated using arithmetic. Need to be careful to account
+;; for the fact that movement east-west is slower than north-south,
+;; i.e. [0 0] to [0 2] is two moves (:ne :se), [0 0] to [0 2] is one
+;; move (:n).
 
 (defn offset [move]
   (case move
@@ -641,7 +646,7 @@
 
 ;;; Day 12
 
-;;; Boooorrring....! DFS for connected components
+;; Boooorrring....! DFS for connected components
 
 (defn prune-explored [explored todo]
   (->> (reverse todo)
@@ -670,24 +675,27 @@
 (defn day12a-result []
   (count (component (parse-graph (day12-input)) 0)))
 
-(defn all-components [g]
-  (loop [components #{} ks (keys g)]
-    (if (seq ks)
-      (let [[k & ks'] ks]
-        (if (and (seq components) ((apply some-fn components) k))
-          (recur components ks')
-          (recur (conj components (component g k)) ks')))
-      components)))
+(defn all-components
+  ([g]
+   (all-components g (keys g)))
+  ([children-fn nodes]
+   (loop [components #{} ks nodes]
+     (if (seq ks)
+       (let [[k & ks'] ks]
+         (if (and (seq components) ((apply some-fn components) k))
+           (recur components ks')
+           (recur (conj components (component children-fn k)) ks')))
+       components))))
 
 (defn day12b-result []
   (count (all-components (parse-graph (day12-input)))))
 
 ;;; Day 13
 
-;;; Movement back and forth in a column of n can be represented as
-;;; cycling through a "phase space" of 2n - 2 (where each location
-;;; represents both position and direction in the original column.
-;;; Everything then becomes pretty straightforward modular arithmetic.
+;; Movement back and forth in a column of n can be represented as
+;; cycling through a "phase space" of 2n - 2 (where each location
+;; represents both position and direction in the original column).
+;; Everything then becomes pretty straightforward modular arithmetic.
 
 (defn phase-modulus [depth]
   {:pre [(pos? depth)]}
@@ -715,8 +723,8 @@
 
 (defn parse-depth-specs [text]
   (for [line (str/split-lines text)]
-    (let [[_ index depth] (re-matches #"(\d+): (\d+)" line)]
-      [(Integer/parseInt index) (Integer/parseInt depth)])))
+    (let [[_ layer depth] (re-matches #"(\d+): (\d+)" line)]
+      [(Integer/parseInt layer) (Integer/parseInt depth)])))
 
 (defn phase-modulus-specs [depth-specs]
   (map (fn [[k v]] [k (phase-modulus v)]) depth-specs))
@@ -736,6 +744,59 @@
   ;; the tighter constraints first to aid shortcutting
   (let [specs (sort-by second (phase-modulus-specs (parse-depth-specs (input-text 13))))]
     (find-delay specs)))
+
+;;; Day 14
+
+;; Part a, just format conversion and counting digits
+
+(defn row-hashes [s]
+  (->> (range 128)
+       (map #(str s "-" %))
+       (map knot-hash)))
+
+(defn hash-bits
+  [h]
+  (let [binary-rep (.toString  (BigInteger. h 16) 2)
+        pad (- 128 (count binary-rep))]
+    (str (apply str (repeat pad \0))
+         binary-rep)))
+
+(def day14-input "hwlqcszp")
+
+(defn day14a-result []
+  (transduce
+   (comp (map hash-bits)
+         (map (fn [bitstring] (count (filter #(= % \1) bitstring)))))
+   +
+   (row-hashes day14-input)))
+
+;; Part b, Wheel out the DFS from day 10
+
+(defn direct-neighbours
+  "Return the non-diagnoal neighbours of the specified cell"
+  [[x y]]
+  (for [[dx dy] [[0  1] [-1  0] [1  0] [0 -1]]]
+    [(+ x dx) (+ y dy)]))
+
+(defn used-cell? [[x y] bitrows]
+  (= (get-in bitrows [y x]) \1))
+
+(defn used-neighbours [bitrows cell]
+  (filter #(used-cell? % bitrows) (direct-neighbours cell)))
+
+(defn used-cells [bitrows]
+  (let [cells (for [x 128 y 128] [x y])]
+    (filter #(used-cell? % bitrows) cells)))
+
+(defn day14-bitrows []
+  (->> (row-hashes day14-input)
+       (map hash-bits)
+       (map vec)
+       (vec)))
+
+(defn day14b-result []
+  (let [bitrows (day14-bitrows)]
+    (count (all-components (partial used-neighbours bitrows) (used-cells bitrows)))))
 
 ;;; Main
 
