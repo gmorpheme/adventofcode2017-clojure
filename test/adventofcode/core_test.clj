@@ -188,7 +188,6 @@ c inc -20 if c == 10")
     (is (= (take 5 day15-test-sequence-b) [430625591 1233683848 1431495498 137874439 285222916]))
     (is (= (take 5 (map generator-match day15-test-sequence-a day15-test-sequence-b)) [false false true false false]))))
 
-
 (deftest test-day15b
   (let [sequence-a (multiples-of 4 (generator-sequence (generator 16807 2147483647) 65))
         sequence-b (multiples-of 8 (generator-sequence (generator 48271 2147483647) 8921))]
@@ -204,3 +203,14 @@ c inc -20 if c == 10")
 
     (testing "matches in first 5m"
       (is (= (count (filter true? (take 5000000 (map generator-match (sequence-a) (sequence-b))))) 309)))))
+
+(deftest test-day16-parse
+  (are [text inst] (= (run-parse (dance-move) text) inst)
+    "s3" [:spin 3]
+    "x1/2" [:exchange 1 2]
+    "pe/b" [:partner \e \b]))
+
+(deftest test-day16a
+  (let [arr (->DanceArray (vec "abcde") 0)]
+    (is (= (str (run-dance arr [[:spin 1] [:exchange 3 4] [:partner \e \b]]))
+           "baedc"))))

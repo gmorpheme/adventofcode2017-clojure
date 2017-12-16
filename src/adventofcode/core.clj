@@ -4,6 +4,14 @@
             [clojure.java.io :as io]
             [clojure.set :as set]))
 
+;;; Todos
+
+;; - Speed up day 5 part b
+;; - Speed up day 15
+;; - Remove pointless protocol in day 16
+;; - Optimise away some stack depth in the parser combinators for day 9 / 16
+;; - Add some specs
+
 ;;; Prologue
 
 ;; Common requirements get refactored up to here when they're needed
@@ -429,12 +437,14 @@
 
 (defn alt
   "Attempt to parse with `p1` but if that fails `p2`. Fail if both fail."
-  [p1 p2]
-  (fn [text]
-    (if-let [[r1 t1] (p1 text)]
-      [r1 t1]
-      (when-let [[r2 t2] (p2 text)]
-        [r2 t2]))))
+  ([p1 p2]
+   (fn [text]
+     (if-let [[r1 t1] (p1 text)]
+       [r1 t1]
+       (when-let [[r2 t2] (p2 text)]
+         [r2 t2]))))
+  ([p1 p2 p3]
+   (alt (alt p1 p2) p3)))
 
 (defn opt
   "Attempt parse with `p`, succeeding returning nil if `p` fails."
@@ -779,13 +789,16 @@
     [(+ x dx) (+ y dy)]))
 
 (defn used-cell? [[x y] bitrows]
+  {:pre [(vector? bitrows)]}
   (= (get-in bitrows [y x]) \1))
 
 (defn used-neighbours [bitrows cell]
+  {:pre [(vector? bitrows)]}
   (filter #(used-cell? % bitrows) (direct-neighbours cell)))
 
 (defn used-cells [bitrows]
-  (let [cells (for [x 128 y 128] [x y])]
+  {:pre [(vector? bitrows)]}
+  (let [cells (for [x (range 128) y (range 128)] [x y])]
     (filter #(used-cell? % bitrows) cells)))
 
 (defn day14-bitrows []
@@ -826,10 +839,87 @@
    (filter true?
            (take 40000000 (map generator-match (day15-sequence-a) (day15-sequence-b))))))
 
-(defn day15b-result [n]
+(defn day15b-result []
   (count
    (filter true?
-           (take n (map generator-match (day15b-sequence-a) (day15b-sequence-b))))))
+           (take 5000000 (map generator-match (day15b-sequence-a) (day15b-sequence-b))))))
+
+;;; Day 16
+
+;; Use our parser combinators again, to translate text into
+;; instruction list
+
+(defn nat []
+  (fmap (many (satisfying ch #(and % (Character/isDigit ^java.lang.Character %))))
+        #(Integer/parseInt (apply str %))))
+
+(defn spin-move []
+  (fmap (sq> (lit \s) (nat))
+        (fn [n] [:spin n])))
+
+(defn exchange-move []
+  (fmap (sq (lit \x) (nat) (lit \/) (nat))
+        (fn [[_ i _ j]]
+          [:exchange i j])))
+
+(defn partner-move []
+  (fmap (sq (lit \p) ch (lit \/) ch)
+        (fn [[_ a _ b]]
+          [:partner a b])))
+
+(defn dance-move [] (alt (spin-move) (exchange-move) (partner-move)))
+
+(defn day16a-instructions []
+  (->> (str/split (input-text 16) #",")
+       (map #(run-parse (dance-move) (str/trim %)))))
+
+(defprotocol Dance
+  (-spin [self n])
+  (-exchange [self i j])
+  (-partner [self a b]))
+
+(defrecord DanceArray [store origin]
+  Dance
+  (-spin [self n]
+    (->DanceArray store (mod (- origin n) (count store))))
+  (-exchange [self i j]
+    (let [i' (mod (+ origin i) (count store))
+          j' (mod (+ origin j) (count store))
+          ic (nth store i')
+          jc (nth store j')
+          store' (assoc store i' jc j' ic)]
+      (->DanceArray store' origin)))
+  (-partner [self a b]
+    (->DanceArray (mapv #(cond (= % a) b (= % b) a :else %) store) origin))
+  Object
+  (toString [self]
+    (apply str (concat (subvec store origin) (subvec store 0 origin)))))
+
+(defn dance-array [] (->DanceArray (vec "abcdefghijklmnop") 0))
+
+(defn run-dance [array instructions]
+  (let [step (fn [array [i & args]]
+               (case i
+                 :exchange (apply -exchange array args)
+                 :spin (apply -spin array args)
+                 :partner (apply -partner array args)))]
+    (reduce step array instructions)))
+
+(defn day16a-result []
+  (str (run-dance (dance-array) (day16a-instructions))))
+
+;; Part b - a billion takes too
+;; long, exploit the fact it is
+;; periodic
+
+(defn day16b-result []
+  (let [instruction (day16a-instructions)
+        one-dance #(run-dance % instruction)
+        dance-sequence (drop 1 (iterate one-dance (dance-array)))
+        a0 (str (first dance-sequence))
+        period (second (remove nil? (map-indexed (fn [i a] (when (= (str a) a0) i)) dance-sequence)))
+        rem (mod 1000000000 period)]
+    (str (first (drop (dec rem) dance-sequence)))))
 
 ;;; Main
 
