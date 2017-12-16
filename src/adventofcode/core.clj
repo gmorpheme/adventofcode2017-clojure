@@ -798,6 +798,39 @@
   (let [bitrows (day14-bitrows)]
     (count (all-components (partial used-neighbours bitrows) (used-cells bitrows)))))
 
+;;; Day 15
+
+(set! *warn-on-reflection* true)
+
+(defn generator [factor modulus]
+  (fn [input]
+    (mod (*' input factor) modulus)))
+
+(defn generator-sequence [g seed]
+  (drop 1 (iterate g seed)))
+
+(defn multiples-of [n seq]
+  (filter #(zero? (mod % n)) seq))
+
+(defn generator-match [a b]
+  (= (bit-and a 0xffff)
+     (bit-and b 0xffff)))
+
+(defn day15-sequence-a [] (generator-sequence (generator 16807 2147483647) 679))
+(defn day15-sequence-b [] (generator-sequence (generator 48271 2147483647) 771))
+(defn day15b-sequence-a [] (multiples-of 4 (day15-sequence-a)))
+(defn day15b-sequence-b [] (multiples-of 8 (day15-sequence-b)))
+
+(defn day15a-result []
+  (count
+   (filter true?
+           (take 40000000 (map generator-match (day15-sequence-a) (day15-sequence-b))))))
+
+(defn day15b-result [n]
+  (count
+   (filter true?
+           (take n (map generator-match (day15b-sequence-a) (day15b-sequence-b))))))
+
 ;;; Main
 
 (defn -main []

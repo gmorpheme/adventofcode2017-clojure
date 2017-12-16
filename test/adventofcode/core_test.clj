@@ -180,3 +180,27 @@ c inc -20 if c == 10")
   (let [bitrows (vec (map vec (map hash-bits (row-hashes "flqrgnkx"))))
         regions (all-components (partial used-neighbours bitrows) (used-cells bitrows))]
     (is (= (count regions) 1242))))
+
+(deftest test-day15a
+  (let [day15-test-sequence-a (generator-sequence (generator 16807 2147483647) 65)
+        day15-test-sequence-b (generator-sequence (generator 48271 2147483647) 8921)]
+    (is (= (take 5 day15-test-sequence-a) [1092455 1181022009 245556042 1744312007 1352636452]))
+    (is (= (take 5 day15-test-sequence-b) [430625591 1233683848 1431495498 137874439 285222916]))
+    (is (= (take 5 (map generator-match day15-test-sequence-a day15-test-sequence-b)) [false false true false false]))))
+
+
+(deftest test-day15b
+  (let [sequence-a (multiples-of 4 (generator-sequence (generator 16807 2147483647) 65))
+        sequence-b (multiples-of 8 (generator-sequence (generator 48271 2147483647) 8921))]
+    (is (= (take 5 sequence-a) [1352636452 1992081072 530830436 1980017072 740335192]))
+    (is (= (take 5 sequence-b) [1233683848 862516352 1159784568 1616057672 412269392]))
+
+    (testing "first match"
+      (is (= (count (drop-while false? (map generator-match sequence-a sequence-b))) 1055)))))
+
+(deftest test-day15b-total-in-5m
+  (let [sequence-a (fn [] (multiples-of 4 (generator-sequence (generator 16807 2147483647) 65)))
+        sequence-b (fn [] (multiples-of 8 (generator-sequence (generator 48271 2147483647) 8921)))]
+
+    (testing "matches in first 5m"
+      (is (= (count (filter true? (take 5000000 (map generator-match (sequence-a) (sequence-b))))) 309)))))
