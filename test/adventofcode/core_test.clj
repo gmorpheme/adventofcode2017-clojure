@@ -214,3 +214,155 @@ c inc -20 if c == 10")
   (let [arr (->DanceArray (vec "abcde") 0)]
     (is (= (str (run-dance arr [[:spin 1] [:exchange 3 4] [:partner \e \b]]))
            "baedc"))))
+
+(deftest test-day17a
+  (let [spinlock (init-spinlock 3)]
+    (is (= (map :base-list (take 10 (iterate step-spinlock spinlock)))
+           ['(0)
+            '(0 1)
+            '(0 2 1)
+            '(0 2 3 1)
+            '(0 2 4 3 1)
+            '(0 5 2 4 3 1)
+            '(0 5 2 4 3 6 1)
+            '(0 5 7 2 4 3 6 1)
+            '(0 5 7 2 4 3 8 6 1)
+            '(0 9 5 7 2 4 3 8 6 1)]))
+
+    (is (pos? (java.util.Collections/indexOfSubList
+               (:base-list (first (drop 2017 (iterate step-spinlock spinlock))))
+               [1512 1134 151 2017 638 1513 851])))))
+
+(def day18-test-input "set a 1
+add a 2
+mul a a
+mod a 5
+snd a
+set a 0
+rcv a
+jgz a -1
+set a 1
+jgz a -2")
+
+(deftest test-day18a
+  (let [pgm (parse-sound-program day18-test-input)]
+    (is (= (:recv (first (filter #(contains? % :recv) (sound-program-state-seq pgm))))
+           4))))
+
+(def day18b-test-input "snd 1
+snd 2
+snd p
+rcv a
+rcv b
+rcv c
+rcv d")
+
+(deftest test-day18b
+  (let [pgm (parse-send-program day18b-test-input)]
+    (is (= (execute-day18b-programs pgm) 3))))
+
+
+(def day19-test-input "     |
+     |  +--+
+     A  |  C
+ F---|----E|--+
+     |  |  |  D
+     +B-+  +--+ ")
+
+(deftest test-day19a
+  (is (= (first (traverse-grid (process-corners (parse-grid-map day19-test-input))))
+         "ABCDEF")))
+
+(deftest test-day19b
+  (is (= (second (traverse-grid (process-corners (parse-grid-map day19-test-input))))
+         38)))
+
+(def day20a-test-particles "p=<3,0,0>, v=<2,0,0>, a=<-1,0,0>
+p=<4,0,0>, v=<0,0,0>, a=<-2,0,0>")
+
+(deftest test-day20a
+  (is (= (:index (min-accel-particle (parse-particle-descriptions day20a-test-particles))) 0)))
+
+(def day20b-test-particles "p=<-6,0,0>, v=<3,0,0>, a=<0,0,0>
+p=<-4,0,0>, v=<2,0,0>, a=<0,0,0>
+p=<-2,0,0>, v=<1,0,0>, a=<0,0,0>
+p=<3,0,0>, v=<-1,0,0>, a=<0,0,0>")
+
+(deftest test-day21a
+  (let [rules (parse-art-rules "../.# => ##./#../...
+.#./..#/### => #..#/..../..../#..#")]
+    (is (= (count-set (nth (iterate (partial art-step rules) genesis-grid) 2)) 12))))
+
+(deftest test-day22a
+  (let [init {:infected (read-infection "..#
+#..
+...") :pos [0 0] :orientation :n :infection-events 0}]
+
+    (is (= (:infected (nth (run-virus init) 1)) #{[0 0] [-1 0] [1 1]}))
+    (is (= (:infected (nth (run-virus init) 2)) #{[0 0] [1 1]}))
+    (is (= (:infected (nth (run-virus init) 6)) #{[0 0] [-1 0] [-2 0] [-2 1] [-1 1] [1 1]}))
+    (is (= (:infected (nth (run-virus init) 7)) #{[0 0] [-1 0] [-2 0] [-2 1] [1 1]}))
+    (is (= (:infection-events (nth (run-virus init) 7)) 5))
+    (is (= (:infection-events (nth (run-virus init) 70)) 41))
+    (is (= (:infection-events (nth (run-virus init) 10000)) 5587))))
+
+(deftest test-day22b
+  (let [init {:infected (read-infection "..#
+#..
+...")
+              :weakened #{}
+              :flagged #{}
+              :pos [0 0]
+              :orientation :n
+              :infection-events 0}]
+
+    (is (= (:infection-events (nth (run-virus-b init) 100)) 26))
+    (is (= (:infection-events (nth (run-virus-b init) 10000000)) 2511944))))
+
+(def day24-test-pieces "0/2
+2/2
+2/3
+3/4
+3/5
+0/1
+10/1
+9/10")
+
+(deftest test-day24a
+  (let [inv (read-inventory day24-test-pieces)]
+    (is (= (best-bridges bridge-strength 0 inv)
+           [[[0 1] [10 1] [9 10]]]))))
+
+(deftest test-day24b
+  (let [inv (read-inventory day24-test-pieces)]
+    (is (= (best-bridges (juxt count bridge-strength) 0 inv)
+           [[[0 2] [2 2] [2 3] [3 5]]]))))
+
+(def test-day25-turing-def "Begin in state A.
+Perform a diagnostic checksum after 6 steps.
+
+In state A:
+  If the current value is 0:
+    - Write the value 1.
+    - Move one slot to the right.
+    - Continue with state B.
+  If the current value is 1:
+    - Write the value 0.
+    - Move one slot to the left.
+    - Continue with state B.
+
+In state B:
+  If the current value is 0:
+    - Write the value 1.
+    - Move one slot to the left.
+    - Continue with state A.
+  If the current value is 1:
+    - Write the value 1.
+    - Move one slot to the right.
+    - Continue with state A.
+")
+
+(deftest test-day25a
+  (let [{:keys [start-state check-step machine]} (day25-input test-day25-turing-def)]
+    (is (= (nth (map (comp clojure.zip/root first) (turing-machine-sequence machine start-state)) check-step)
+           [1 1 0 1]))))

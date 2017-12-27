@@ -1,0 +1,50 @@
+;; program seems to check for primes in a range
+
+	  :INIT  set b 93
+		 set c b
+
+		 jnz *DEBUG :REAL  ;; if *DEBUG :REAL
+		 jnz 1 :MAIN          ;;
+
+	  :REAL  mul b 100
+		 sub b -100000
+		 set c b
+		 sub c -17000
+
+		 ;; real: b = 109300 c = 126300
+
+
+:L1BODY	  :MAIN  set *PRIME 1    ;; for b = 109300 to 126300 step 17 ... register f = *PRIME
+
+:L2INIT          set d 2
+
+:L2BODY :L3INIT  set e 2   ;; for e = 2 to b
+
+	:L3BODY  set g d   ;; if d * e == b then *PRIME = 0
+		 mul g e
+		 sub g b
+		 jnz g :C
+		 set *PRIME 0    ;;; causing inc h later - there exist 2 <= e, d < b s.t d*e = b . i.e. b non-prime
+
+	  :C     sub e -1  ;; inc e
+		 set g e   ;; while e != b  continue :L3BODY
+		 sub g b    ;;; this could be limited by d to avoid checking both ways
+		 jnz g :L3BODY
+
+		 sub d -1 ;; inc d
+		 set g d  ;; while d != b continue :L2BODY
+		 sub g b
+		 jnz g :L2BODY
+
+
+		 jnz *PRIME :F  ;; if *PRIME == 0 inc h else :F
+		 sub h -1  ; h is count of composites between 109300 and 126300 at steps of 17
+
+	  :F     set g b   ;; if b == c :EXIT else :G
+		 sub g c
+		 jnz g :G
+
+	  :G     sub b -17  ;; b += 17
+		 jnz 1 :L1BODY
+
+	  :EXIT  jnz 1 :out

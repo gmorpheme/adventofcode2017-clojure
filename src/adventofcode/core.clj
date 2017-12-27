@@ -2,7 +2,12 @@
   "Clojure adventofcode.com solutions"
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.zip :as z]
+            [clojure.core.async :refer (>!! <!! chan thread timeout alts!!)]))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* false)
 
 ;;; Todos
 
@@ -15,8 +20,7 @@
 ;;; Prologue
 
 ;; Common requirements get refactored up to here when they're needed
-;; repeatedly. Avoiding all deps apart from pure Clojure 1.9 for
-;; this.
+;; repeatedly. Avoiding all deps apart from pure Clojure 1.9 for this.
 
 (defn input-text
   "Read input for a day from resources"
@@ -139,7 +143,7 @@
 (defn cell-distance [value]
   (let [index (ring-index value)
         ring-item (- value (ring-min index))
-        [x y] (first (drop ring-item (ring-seq index)))]
+        [^long x ^long y] (first (drop ring-item (ring-seq index)))]
     (+ (int (Math/abs x)) (int (Math/abs y)))))
 
 (defn day3a-result []
@@ -252,7 +256,7 @@
   "Find the bank with the most blocks"
   [banks]
   (let [m (apply max banks)]
-    (.indexOf banks m)))
+    (.indexOf ^java.util.List banks m)))
 
 (defn reallocate
   "Do a single reallocation; find largest bank and distribute"
@@ -316,7 +320,7 @@
   [input]
   (into {} (map (fn [x] [(:name x) x]) input)))
 
-(declare total-weight)
+(declare total-weight sender)
 
 (defn total-weight* [{:keys [name weight subprograms]} graph]
   (apply + weight (map #(total-weight (get graph %) graph) subprograms)))
@@ -435,16 +439,24 @@
         [(list r1) t1])
       [nil text])))
 
+(defn many1
+  "Parse 1 or more times with `p`, returning list of results"
+  [p]
+  (fn [text]
+    (when-let [[r1 t1] (p text)]
+      (if-let [[rs t2] ((many p) t1)]
+        [(cons r1 rs) t2]
+        [(list r1) t1]))))
+
 (defn alt
-  "Attempt to parse with `p1` but if that fails `p2`. Fail if both fail."
-  ([p1 p2]
-   (fn [text]
-     (if-let [[r1 t1] (p1 text)]
-       [r1 t1]
-       (when-let [[r2 t2] (p2 text)]
-         [r2 t2]))))
-  ([p1 p2 p3]
-   (alt (alt p1 p2) p3)))
+  "Attempt to parse with `ps` using result of first that succeeds, else
+  fail"
+  [& ps]
+  (fn [text]
+    (when (seq ps)
+      (if-let [[r1 t1] ((first ps) text)]
+        [r1 t1]
+        ((apply alt (rest ps)) text)))))
 
 (defn opt
   "Attempt parse with `p`, succeeding returning nil if `p` fails."
@@ -456,7 +468,7 @@
 
 (defn fmap
   "Parse with `p` but map return with `f`"
-  [p f]
+  [f p]
   (fn [text]
     (when-let [[r t] (p text)]
       [(f r) t])))
@@ -464,19 +476,19 @@
 (defn eat
   "Parse with `p` but return nil result"
   [p]
-  (fmap p (constantly nil)))
+  (fmap (constantly nil) p))
 
 (defn sq>
   "As per `sq` but return result of last parser, not the sequence."
   [& ps]
-  (fmap (apply sq ps) last))
+  (fmap last (apply sq ps)))
 
 (defn many-sep-by
   "Parse a sequence of `p` separated by `sep`"
   [sep p]
   (opt (fmap
-        (sq p (many (sq> sep p)))
-        #(apply cons %))))
+        #(apply cons %)
+        (sq p (many (sq> sep p))))))
 
 (defn run-parse [parser text]
   (if-let [[result residue] (parser text)]
@@ -502,8 +514,8 @@
 
 (defn item [text] ((alt eat-garbage group-nesting) text))
 
-(def group-nesting (fmap (sq (lit \{) (many-sep-by (lit \,) item) (lit \}))
-                         (fn [[_ xs _]] (vec (remove nil? xs)))))
+(def group-nesting (fmap (fn [[_ xs _]] (vec (remove nil? xs)))
+                         (sq (lit \{) (many-sep-by (lit \,) item) (lit \}))))
 
 ;; ...and functions to evaluate the structure
 
@@ -523,14 +535,14 @@
 
 ;; 9b - alter semantic actions to count garbage instead
 
-(defn counted-garbage [] (fmap garbage (fn [[_ cs _]] (count  cs))))
+(defn counted-garbage [] (fmap (fn [[_ cs _]] (count  cs))garbage))
 
 (declare group-9b)
 
 (defn item-9b [text] ((alt (counted-garbage) (group-9b)) text))
 
-(defn group-9b [] (fmap (sq (lit \{) (many-sep-by (lit \,) item-9b) (lit \}))
-                      (fn [[_ xs _]] (apply + (remove nil? xs)))))
+(defn group-9b [] (fmap (fn [[_ xs _]] (apply + (remove nil? xs)))
+                        (sq (lit \{) (many-sep-by (lit \,) item-9b) (lit \}))))
 
 (defn day9b-result [] (run-parse (group-9b) (clean-cancellations day9-input)))
 
@@ -564,8 +576,7 @@
 
 (defn as-list [indices]
   (let [init (vec (repeat (count indices) 0))]
-    (->> (map-indexed vector indices)
-         (reduce (fn [v [n i]] (assoc v i n)) init))))
+    (reduce (fn [v [n i]] (assoc v i n)) init (map-indexed vector indices))))
 
 (defn run-10a [n lengths]
   (let [indices (:indices (reduce step (start-state n) lengths))]
@@ -577,7 +588,7 @@
   (let [[a b & cs] (run-10a 256 day10-input)]
     (* a b)))
 
-(defn lengths-10b [s]
+(defn lengths-10b [^String s]
   {:pre [(string? s)]}
   (concat (seq (.getBytes s)) [17 31 73 47 23]))
 
@@ -585,7 +596,7 @@
   (->> (partition 16 arr)
        (map (partial apply bit-xor))
        (map (partial format "%02x"))
-       (apply str)))
+       (str/join)))
 
 (defn knot-hash
   "`n` is size of knotting array, `s` is string to hash"
@@ -638,7 +649,7 @@
     (neg? rem-x) (if (pos? rem-y) :nw :sw)
     (zero? rem-x) (if (pos? rem-y) :n :s)))
 
-(defn step-distance [[x y]]
+(defn step-distance [[^long x ^long y]]
   (let [abs-x (Math/abs x)
         abs-y (Math/abs y)]
     (if (> abs-x abs-y)
@@ -765,10 +776,10 @@
        (map knot-hash)))
 
 (defn hash-bits
-  [h]
+  [^String h]
   (let [binary-rep (.toString  (BigInteger. h 16) 2)
         pad (- 128 (count binary-rep))]
-    (str (apply str (repeat pad \0))
+    (str (str/join (repeat pad \0))
          binary-rep)))
 
 (def day14-input "hwlqcszp")
@@ -813,8 +824,6 @@
 
 ;;; Day 15
 
-(set! *warn-on-reflection* true)
-
 (defn generator [factor modulus]
   (fn [input]
     (mod (*' input factor) modulus)))
@@ -850,28 +859,25 @@
 ;; instruction list
 
 (defn nat []
-  (fmap (many (satisfying ch #(and % (Character/isDigit ^java.lang.Character %))))
-        #(Integer/parseInt (apply str %))))
+  (fmap #(Integer/parseInt (str/join %))
+        (many1 (satisfying ch #(and % (Character/isDigit ^java.lang.Character %))))))
 
 (defn spin-move []
-  (fmap (sq> (lit \s) (nat))
-        (fn [n] [:spin n])))
+  (fmap (fn [n] [:spin n])
+        (sq> (lit \s) (nat))))
 
 (defn exchange-move []
-  (fmap (sq (lit \x) (nat) (lit \/) (nat))
-        (fn [[_ i _ j]]
-          [:exchange i j])))
+  (fmap (fn [[_ i _ j]] [:exchange i j])
+        (sq (lit \x) (nat) (lit \/) (nat))))
 
 (defn partner-move []
-  (fmap (sq (lit \p) ch (lit \/) ch)
-        (fn [[_ a _ b]]
-          [:partner a b])))
+  (fmap (fn [[_ a _ b]][:partner a b])
+        (sq (lit \p) ch (lit \/) ch)))
 
 (defn dance-move [] (alt (spin-move) (exchange-move) (partner-move)))
 
 (defn day16a-instructions []
-  (->> (str/split (input-text 16) #",")
-       (map #(run-parse (dance-move) (str/trim %)))))
+  (map #(run-parse (dance-move) (str/trim %)) (str/split (input-text 16) #",")))
 
 (defprotocol Dance
   (-spin [self n])
@@ -893,7 +899,7 @@
     (->DanceArray (mapv #(cond (= % a) b (= % b) a :else %) store) origin))
   Object
   (toString [self]
-    (apply str (concat (subvec store origin) (subvec store 0 origin)))))
+    (str/join (concat (subvec store origin) (subvec store 0 origin)))))
 
 (defn dance-array [] (->DanceArray (vec "abcdefghijklmnop") 0))
 
@@ -908,9 +914,7 @@
 (defn day16a-result []
   (str (run-dance (dance-array) (day16a-instructions))))
 
-;; Part b - a billion takes too
-;; long, exploit the fact it is
-;; periodic
+;; Part b - a billion takes too long, exploit the fact it is periodic
 
 (defn day16b-result []
   (let [instruction (day16a-instructions)
@@ -920,6 +924,851 @@
         period (second (remove nil? (map-indexed (fn [i a] (when (= (str a) a0) i)) dance-sequence)))
         rem (mod 1000000000 period)]
     (str (first (drop (dec rem) dance-sequence)))))
+
+;;; Day 17
+
+(defrecord SpinLock [step counter position base-list])
+
+(defn init-spinlock [step]
+  (->SpinLock step 1 0 '(0)))
+
+(defn step-spinlock [{:keys [step counter position base-list] :as spinlock}]
+  (let [new-pos (mod (+ position step) counter)]
+    (->SpinLock
+     step
+     (inc counter)
+     (inc new-pos)
+     (apply list (concat (take (inc new-pos) base-list) (cons counter (drop (inc new-pos) base-list)))))))
+
+(defn day17a-result []
+  (let [buffer ^java.util.List (:base-list (first (drop 2017 (iterate step-spinlock (init-spinlock 343)))))]
+    (nth buffer (inc (.indexOf buffer 2017)))))
+
+(defn light-stepper [step]
+  (fn [[^long counter ^long position]]
+    [(inc counter) (inc (mod (+ position step) counter))]))
+
+(defn final-insert-at-one [step-size limit]
+  (let [step (light-stepper step-size)
+        pos-seq (take limit (iterate step [1 0]))
+        inserts-at-one (map (comp dec first) (filter (fn [[_ p]] (= 1 p)) pos-seq))]
+    (last inserts-at-one)))
+
+(defn day17b-result []
+  (final-insert-at-one 343 50000000))
+
+;;; Day 18
+
+;; A few more parser primitives to read the program and convert into
+;; functions to modify a map environment
+
+(defn lit-str
+  "Parse a string literal"
+  [s]
+  (apply sq (map lit s)))
+
+(def space (lit \space))
+
+;; We're going to build instructions as functions that operate on map
+;; environments. Similarly values (which may be literals or register
+;; references) may only have a value in the context of an environment,
+;; so we'll parse "rvalues" to functions on environments
+
+(def int-numeral (fmap (fn [[n v]] ((if n - +) v)) (sq (opt (lit \-)) (nat))))
+(def reg (fmap (fn [c] (fn [env] (get env c 0))) ch))
+(def rvalue (alt (fmap constantly int-numeral) reg))
+
+;; Now the functions on environments which correspond to the
+;; instructions. Most of these bump a special :ip instruction pointer
+;; register. send / sound and recover / receive also use special
+;; registers.
+
+(defn binop
+  "Create a function which operates on environment `env` by applying
+  binary operator `op` to register and result of applying `value-fn`
+  to environment and bumping the instruction pointer register."
+  [op register value-fn]
+  (fn [env]
+    (let [val (value-fn env)]
+      (-> env
+          (update register (fnil op 0 0) val)
+          (update :ip (fnil inc 0))))))
+
+(defn setter
+  "Create a function which operates on environment `env` by setting
+  `register` to result of applying `value-fn` to register and bumping
+  the instruction pointer register. "
+  [register value-fn]
+  (fn [env]
+    (let [val (value-fn env)]
+      (-> env
+          (assoc register val)
+          (update :ip (fnil inc 0))))))
+
+(defn sounder
+  [freq-fn]
+  (fn [env]
+    (let [val (freq-fn env)]
+      (-> env
+       (assoc :send val)
+       (update :ip (fnil inc 0))))))
+
+(defn recoverer
+  [cond-fn]
+  (fn [env]
+    (let [val (cond-fn env)]
+      (-> env
+          (cond-> (not (zero? val))
+            (assoc :recv (get env :send)))
+          (update :ip (fnil inc 0))))))
+
+(defn conditional-jumper
+  [test-fn jump-fn]
+  (fn [env]
+    (let [test (test-fn env)
+          jump (jump-fn env)]
+      (if (pos? test)
+        (update env :ip (fnil + 0 0) jump)
+        (update env :ip (fnil inc 0))))))
+
+;; Parsers for the instructions, returning environment functions as values
+
+(defn setval [] (fmap (fn [[_ _ r _ v]] (setter r v)) (sq (lit-str "set") space ch space rvalue)))
+(defn addval [] (fmap (fn [[_ _ r _ v]] (binop + r v)) (sq (lit-str "add") space ch space rvalue)))
+(defn mulval [] (fmap (fn [[_ _ r _ v]] (binop * r v)) (sq (lit-str "mul") space ch space rvalue)))
+(defn modval [] (fmap (fn [[_ _ r _ v]] (binop mod r v)) (sq (lit-str "mod") space ch space rvalue)))
+(defn snd [] (fmap (fn [[_ _ v]] (sounder v)) (sq (lit-str "snd") space rvalue)))
+(defn rcv [] (fmap (fn [[_ _ v]] (recoverer v)) (sq (lit-str "rcv") space rvalue)))
+(defn jgz [] (fmap (fn [[_ _ t _ j]] (conditional-jumper t j)) (sq (lit-str "jgz") space rvalue space rvalue)))
+(defn parse-sound-instruction [] (alt (setval) (addval) (mulval) (modval) (snd) (rcv) (jgz)))
+
+(defn parse-sound-program
+  [text]
+  (->> text
+       (str/split-lines)
+       (map (partial run-parse (parse-sound-instruction)))))
+
+(defn day18a-program []
+  (parse-sound-program (input-text 18)))
+
+(defn sound-program-state-seq [pgm]
+  (let [step (fn [env]
+               (let [ip (get env :ip 0)]
+                 (when-let [instruction (nth pgm ip)]
+                   (instruction env))))]
+    (iterate step {})))
+
+(defn day18a-result []
+  (->> (day18a-program)
+       (sound-program-state-seq)
+       (filter #(contains? % :recv))
+       (first)
+       :recv))
+
+;; Part b - parse snd and rcv to functions which read and write to
+;; core.async channels and record in and out traffic.
+
+(defn complete [env]
+  (assoc env :complete true))
+
+(defn sender
+  [value-fn]
+  (fn [env]
+    (let [out (get env :out)
+          val (value-fn env)]
+      (>!! out val)
+      (-> env
+          (update :sent (fnil conj []) val)
+          (update :ip (fnil inc 0))))))
+
+(defn receiver
+  [register]
+  (fn [env]
+    (let [in (get env :in)
+          [val ch] (alts!! [in (timeout 1000)])]
+      (if (or (not= ch in) (nil? val))
+        (complete env)
+        (-> env
+            (assoc register val)
+            (update :received (fnil conj []) val)
+            (update :ip (fnil inc 0)))))))
+
+(defn sendval [] (fmap (fn [[_ _ v]] (sender v)) (sq (lit-str "snd") space rvalue)))
+(defn recvval [] (fmap (fn [[_ _ r]] (receiver r)) (sq (lit-str "rcv") space ch)))
+
+(defn parse-send-instruction [] (alt (setval) (addval) (mulval) (modval) (sendval) (recvval) (jgz)))
+
+(defn parse-send-program
+  [text]
+  (->> text
+       (str/split-lines)
+       (map (partial run-parse (parse-send-instruction)))))
+
+(defn day18b-program []
+  (parse-send-program (input-text 18)))
+
+(defn execute-day18b-program [pgm state]
+  (let [state (atom state)
+        program (get @state \p)
+        step (fn [env]
+               (let [ip (get env :ip 0)]
+                 (let [instruction (nth pgm ip complete)]
+                   (update (instruction env) :tick (fnil inc 0)))))]
+    (while (not (:complete @state))
+      (swap! state step))
+    @state))
+
+(defn execute-day18b-programs [pgm]
+  (let [a->b (chan 1000)
+        b->a (chan 1000)
+        state-a {\p 0 :out a->b :in b->a}
+        state-b {\p 1 :out b->a :in a->b}
+        thread-a (thread (execute-day18b-program pgm state-a))
+        thread-b (thread (execute-day18b-program pgm state-b))
+        b-end-state (<!! thread-b)
+        a-end-state (<!! thread-a)]
+    (count (:sent b-end-state))))
+
+(defn day18b-result []
+  (execute-day18b-programs (day18b-program)))
+
+;;; Day 19
+
+;; Y increases southwards for this one
+
+(def north-south (fmap (constantly :ns) (lit \|)))
+(def east-west (fmap (constantly :ew) (lit \-)))
+(def corner (fmap (constantly :corner) (lit \+)))
+(def map-space (eat space))
+(def letter (satisfying ch #(and (some? %) (Character/isUpperCase ^char %))))
+
+(def map-cell (alt map-space north-south east-west corner letter))
+(def map-row (fmap vec (many map-cell)))
+
+(defn parse-grid-map [text]
+  (mapv #(run-parse map-row %) (str/split-lines text)))
+
+(defn process-corners
+  "Establish what + marks really represent based on surrounding roads."
+  [grid]
+  (let [width (apply max (map count grid))
+        height (count grid)]
+    (vec (for [y (range height)]
+           (vec (for [x (range width)]
+                  (let [cell (get-in grid [y x])
+                        east (get-in grid [y (inc x)])
+                        west (get-in grid [y (dec x)])
+                        north (get-in grid [(dec y) x])
+                        south (get-in grid [(inc y) x])]
+                    (case cell
+                        :corner (cond-> #{}
+                                  (or (#{:ew :corner} west) (char? west)) (conj :w)
+                                  (or (#{:ew :corner} east) (char? east)) (conj :e)
+                                  (or (#{:ns :corner} north) (char? north)) (conj :n)
+                                  (or (#{:ns :corner} south) (char? south)) (conj :s))
+                        :ns #{:n :s}
+                        :ew #{:e :w}
+                        cell))))))))
+
+(defn entrance [grid]
+  [(.indexOf ^java.util.List (first grid) #{:n :s}) 0])
+
+(defn move-in-map
+  "Return new co-ordinate"
+  [[x y] direction]
+  {:pre [(#{:n :s :e :w} direction)]}
+  (case direction
+    :n [x (dec y)]
+    :s [x (inc y)]
+    :e [(inc x) y]
+    :w [(dec x) y]))
+
+(defn opposite-direction [dir]
+  {:pre [(#{:n :s :e :w} dir)]}
+  (case dir :n :s :s :n :e :w :w :e))
+
+(defn move-through-cell
+  "Move through `grid` from `[x y]` assuming incoming direction `direction`. Return
+[new-cell-coord new-direction letter-or-nil] or nil if done."
+  [grid [x y] direction]
+  (when-let [cell (get-in grid [y x])]
+    (let [from-direction (opposite-direction direction)
+          new-direction (if (and (set? cell) (contains? cell from-direction))
+                          (first (disj cell from-direction))
+                          direction)
+          letter (when (char? cell) cell)]
+      [(move-in-map [x y] new-direction) new-direction letter])))
+
+(defn traverse-grid
+  [grid]
+  (loop [[x y] (entrance grid) dir :s letters [] path []]
+    (if-let [[[x' y'] new-dir letter] (move-through-cell grid [x y] dir)]
+      (recur [x' y'] new-dir (if letter (conj letters letter) letters) (conj path [x y]))
+      [(str/join letters) (count path)])))
+
+(defn day19a-result []
+  (let [grid (process-corners (parse-grid-map (input-text 19)))]
+    (first (traverse-grid grid))))
+
+(defn day19b-result []
+  (let [grid (process-corners (parse-grid-map (input-text 19)))]
+    (second (traverse-grid grid))))
+
+;;; Day 20
+
+(def vector-quantity
+  (fmap (fn [[_ x _ y _ z _]] [x y z])
+        (sq (lit \<) int-numeral (lit \,) int-numeral (lit \,) int-numeral (lit \>))))
+
+(def particle
+  (fmap (fn [[_ p _ _ v _ _ a]] {:position p :velocity v :acceleration a})
+        (sq (lit-str "p=") vector-quantity (lit-str ", ")
+            (lit-str "v=") vector-quantity (lit-str ", ")
+            (lit-str "a=") vector-quantity)))
+
+(defn parse-particle-descriptions [text]
+  (let [particles (map (partial run-parse particle) (str/split-lines text))]
+    (map-indexed (fn [i p] (assoc p :index i)) particles)))
+
+(defn day20-particles []
+  (parse-particle-descriptions (input-text 20)))
+
+(defn manhattan-magnitude [[^long x ^long y ^long z]]
+  (+ (Math/abs x)
+     (Math/abs y)
+     (Math/abs z)))
+
+(defn euclidean-norm [[x y z]]
+  (let [sqr (fn [i] (* i i))]
+    (Math/sqrt (+ (sqr x) (sqr y) (sqr z)))))
+
+(defn min-accel-particle [particles]
+  (apply min-key (comp manhattan-magnitude :acceleration) particles))
+
+(defn day20a-result []
+  (let [particles (day20-particles)]
+    (:index (min-accel-particle particles))))
+
+;; We need full simulation for part b because of the discrete nature
+;; of the problem... particles don't collide if they hop over each
+;; other...
+
+(defn vector+ [[lx ly lz] [rx ry rz]]
+  [(+' lx rx) (+' ly ry) (+' lz rz)])
+
+(defn evolve1 [particles]
+  (for [{:keys [position velocity acceleration] :as p} particles]
+    (let [new-velocity (vector+ velocity acceleration)]
+      (assoc p
+             :velocity new-velocity
+             :position (vector+ position new-velocity)))))
+
+(defn prune-collisions [particles]
+  (let [grouped (group-by :position particles)]
+    (->> grouped
+         (filter (fn [[pos ps]] (= 1 (count ps))))
+         (mapcat second))))
+
+(defn evolve [particles]
+  (let [step (comp prune-collisions evolve1)]
+    (iterate step particles)))
+
+;; Crude termination condition - experimented with equivalent sorts of
+;; p, v, a but in the end just looked for a period (1000 repetitions)
+;; of stable particle count
+
+(defn day20b-result []
+  (let [evolving-count (reductions
+                        (fn [[prev-n repeats] ps] (if (= prev-n (count ps)) [prev-n (inc repeats)] [(count ps) 1]))
+                        [1000 0]
+                        (evolve (day20-particles)))]
+    (ffirst (filter (fn [[count repeats]] (> repeats 1000)) evolving-count))))
+
+;;; Day 21
+
+(defprotocol ArtGrid
+  (grid-size [self])
+  (is-set? [self [x y]]))
+
+(defrecord SimpleGrid [rows]
+  ArtGrid
+  (grid-size [self]
+    (count rows))
+  (is-set? [self [x y]]
+    (= 1 (get-in rows [y x]))))
+
+(defn simple-grid [rows]
+  {:pre [(vector? rows) (vector? (first rows)) (= (count rows) (count (first rows)))]}
+  (->SimpleGrid rows))
+
+(defrecord BlockGrid [block-rows block-size]
+  ArtGrid
+  (grid-size [self]
+    (* block-size (count block-rows)))
+  (is-set? [self [x y]]
+    (let [block (get-in block-rows [(quot y block-size) (quot x block-size)])]
+      (is-set? block [(mod x block-size) (mod y block-size)]))))
+
+(defn block-grid [block-rows]
+  (let [block-size (grid-size (ffirst block-rows))]
+    (->BlockGrid block-rows block-size)))
+
+(def genesis-grid (->SimpleGrid [[0 1 0]
+                                 [0 0 1]
+                                 [1 1 1]]))
+
+(def art-grid-cell (alt (fmap (constantly 0) (lit \.)) (fmap (constantly 1) (lit \#))))
+(def art-grid-row (fmap vec (many art-grid-cell)))
+(def art-grid (fmap (comp ->SimpleGrid vec) (many-sep-by (lit \/) art-grid-row)))
+(def art-rule (fmap (fn [[match _ sub]] {:match match :substitution sub}) (sq art-grid (lit-str " => ") art-grid)))
+
+(defn grid-identifier
+  "Unique id for this grid (within this grid-size) formed by reading the
+  elements as a binary number. Least significant digit is top-left, most
+  significant is bottom right"
+  [grid]
+  (reduce bit-or (let [sz (grid-size grid)]
+                   (for [y (range sz) x (range sz)]
+                     (if (is-set? grid [x y])
+                       (bit-shift-left 1 (+ (* y sz) x))
+                       0)))))
+
+(defn rotate-clockwise [grid]
+  (let [sz (grid-size grid)]
+    (simple-grid
+     (vec (for [x (range sz)]
+            (vec (for [y (range (dec sz) -1 -1)]
+                   (if (is-set? grid [x y]) 1 0))))))))
+
+(defn reflect-in-vertical [grid]
+  (simple-grid (mapv (comp vec reverse) (:rows grid))))
+
+(defn equivalent-grids
+  [grid]
+  (set (concat (take 4 (iterate rotate-clockwise grid))
+               (take 4 (iterate rotate-clockwise (reflect-in-vertical grid))))))
+
+(defn equivalent-grid-identifiers [grid]
+  (map grid-identifier (equivalent-grids grid)))
+
+(defn index-rule [index {:keys [match substitution]}]
+  (let [eq-ids (equivalent-grid-identifiers match)]
+    (reduce
+     #(assoc %1 %2 substitution)
+     index
+     eq-ids)))
+
+(defn parse-art-rules
+  "Parses art rules into lookup vectors, one for two-grids and one for
+  three-grids, each storing substitutions grids at indexes
+  corresponding to grid-identifiers in the vector."
+  [text]
+  (let [rules (map (partial run-parse art-rule) (str/split-lines text))
+        two-grid-rules (filter #(= 2 (grid-size (:match %))) rules)
+        three-grid-rules (filter #(= 3 (grid-size (:match %))) rules)
+        index-2 (vec (take 16 (repeat nil)))
+        index-3 (vec (take 512 (repeat nil)))]
+    [(reduce index-rule index-2 two-grid-rules)
+     (reduce index-rule index-3 three-grid-rules)]))
+
+(defn read-grid-identifier
+  "Read a grid of size starting at [x y] and return the identifier for it"
+  [grid size [x y]]
+  (reduce bit-or
+          (for [dy (range size) dx (range size)]
+            (if (is-set? grid [(+ x dx) (+ y dy)])
+              (bit-shift-left 1 (+ (* dy size) dx))
+              0))))
+
+(defn block-identifiers
+  "Dividing the grid into blocks of `size`, return the rows of
+  grid-identifiers of these blocks"
+  [grid block-size]
+  (let [sz (grid-size grid)]
+    (for [y (range 0 sz block-size)]
+      (for [x (range 0 sz block-size)]
+        (read-grid-identifier grid block-size [x y])))))
+
+(defn art-step [[index-2 index-3] grid]
+  (let [sz (grid-size grid)
+        even? (zero? (mod sz 2))
+        next-size (if even? 2 3)
+        index (if even? index-2 index-3)]
+    (->> (block-identifiers grid next-size)
+         (mapv #(mapv (fn [id] (get index id)) %))
+         (block-grid))))
+
+(defn count-set [grid]
+  (let [sz (grid-size grid)]
+    (count
+     (filter identity
+             (for [x (range sz) y (range sz)]
+               (is-set? grid [x y]))))))
+
+(defn evolve-art []
+  (iterate (partial art-step (parse-art-rules (input-text 21))) genesis-grid))
+
+(defn day21a-result []
+  (count-set (nth (evolve-art) 5)))
+
+(defn day21b-result []
+  (count-set (nth (evolve-art) 18)))
+
+;;; Day 22
+
+;; We won't represent the grid, just track infected cells, so more
+;; convenient for Y to increase Northwards
+
+(defn read-infection
+  "Read initial map and return set of infected co-ordinates"
+  [text]
+  (let [grid (->> (str/split-lines text)
+                  (mapv #(mapv (fn [c] (case c \# true false)) %)))
+        width (count (first grid))
+        height (count grid)
+        min-x (/ (dec width) 2)
+        min-y (/ (dec height) 2)
+        range-x (range (- min-x) (inc min-x))
+        range-y (range min-y (- (inc min-y)) -1)]
+    (set
+     (remove nil? (for [y range-y x range-x]
+                    (when (get-in grid [(+ min-y (- y)) (+ min-x x)])
+                      [x y]))))))
+
+
+(defn turn-right [orientation]
+  (case orientation
+    :n :e
+    :e :s
+    :s :w
+    :w :n))
+
+(defn turn-left [orientation]
+  (case orientation
+    :e :n
+    :s :e
+    :w :s
+    :n :w))
+
+(defn advance [orientation [x y]]
+  (case orientation
+    :n [x (inc y)]
+    :e [(inc x) y]
+    :s [x (dec y)]
+    :w [(dec x) y]))
+
+(defn step-virus [{:keys [infected pos orientation infection-events]}]
+  (if (infected pos)
+    (let [new-dir (turn-right orientation)
+          infected (disj infected pos)
+          new-pos (advance new-dir pos)]
+      {:infected infected
+       :pos new-pos
+       :orientation new-dir
+       :infection-events infection-events})
+    (let [new-dir (turn-left orientation)
+          infected (conj infected pos)
+          new-pos (advance new-dir pos)]
+      {:infected infected
+       :pos new-pos
+       :orientation new-dir
+       :infection-events (inc infection-events)})))
+
+(defn initial-day22-state []
+  {:infected (read-infection (input-text 22))
+   :weakened #{}
+   :flagged #{}
+   :pos [0 0]
+   :orientation :n
+   :infection-events 0})
+
+(defn run-virus [state]
+  (iterate step-virus state))
+
+(defn render
+  "Useful for REPL-based diagnostics..."
+  [{:keys [infected flagged weakened] :as state}]
+  (let [marked (set/union infected flagged weakened)
+        min-x (reduce min (map first marked))
+        max-x (reduce max (map first marked))
+        min-y (reduce min (map second marked))
+        max-y (reduce max (map second marked))]
+    (doseq [y (range max-y (dec min-y) -1)]
+      (doseq [x (range min-x (inc max-x))]
+        (cond
+          (infected [x y]) (print "#")
+          (flagged [x y]) (print "F")
+          (weakened [x y]) (print "W")
+          :else (print ".")))
+      (print \newline))
+    (println "Infection events:" (:infection-events state))))
+
+(defn day22a-result []
+  (:infection-events (nth (run-virus (initial-day22-state)) 10000)))
+
+;; Part b is just a different step function
+
+(defn step-virus-b [{:keys [infected flagged weakened pos orientation infection-events] :as state}]
+  (cond
+    (infected pos) (let [infected (disj infected pos)
+                         flagged (conj flagged pos)
+                         new-dir (turn-right orientation)
+                         new-pos (advance new-dir pos)]
+                     (assoc state
+                            :infected infected
+                            :flagged flagged
+                            :pos new-pos
+                            :orientation new-dir))
+    (flagged pos) (let [flagged (disj flagged pos)
+                        new-dir (turn-right (turn-right orientation))
+                        new-pos (advance new-dir pos)]
+                    (assoc state
+                           :flagged flagged
+                           :pos new-pos
+                           :orientation new-dir))
+    (weakened pos) (let [infected (conj infected pos)
+                         weakened (disj weakened pos)
+                         new-pos (advance orientation pos)]
+                     (assoc state
+                            :infected infected
+                            :weakened weakened
+                            :pos new-pos
+                            :infection-events (inc infection-events)))
+    :else (let [weakened (conj weakened pos)
+                new-dir (turn-left orientation)
+                new-pos (advance new-dir pos)]
+            (assoc state
+                   :weakened weakened
+                   :pos new-pos
+                   :orientation new-dir))))
+
+(defn run-virus-b [state]
+  (iterate step-virus-b state))
+
+(defn day22b-result []
+  (:infection-events (nth (run-virus-b (initial-day22-state)) 10000000)))
+
+;;; Day 23
+
+;; Re-use most of the day 18 parsers and implementation with new op code
+
+(defn non-zero-jumper
+  [test-fn jump-fn]
+  (fn [env]
+    (let [test (test-fn env)
+          jump (jump-fn env)]
+      (if (not (zero? test))
+        (update env :ip (fnil + 0 0) jump)
+        (update env :ip (fnil inc 0))))))
+
+;; And decorator for counting op codes
+
+(defn tally
+  "Instrument an op code function to keep track of number of executions
+  at specified key in the environment"
+  [key op]
+  (fn [env]
+    (update (op env) key (fnil inc 0))))
+
+(defn tallied-mulval [] (fmap (partial tally :mulval) (mulval)))
+(defn subval [] (fmap (fn [[_ _ r _ v]] (binop - r v)) (sq (lit-str "sub") space ch space rvalue)))
+(defn jnz [] (fmap (fn [[_ _ t _ j]] (non-zero-jumper t j)) (sq (lit-str "jnz") space rvalue space rvalue)))
+
+(defn parse-day23a-instruction [] (alt (setval) (subval) (tallied-mulval) (jnz)))
+
+(defn parse-day23a-program []
+  (map
+   (partial run-parse (parse-day23a-instruction))
+   (str/split-lines (input-text 23))))
+
+(defn day23-state-seq [pgm initial-state]
+  (let [step (fn [env]
+               (let [ip (get env :ip 0)]
+                 (let [instruction (nth pgm ip complete)]
+                   (update (instruction env) :tick (fnil inc 0)))))]
+    (iterate step initial-state)))
+
+(defn execute-day23-program [pgm initial-state]
+      (first (filter :complete (day23-state-seq pgm initial-state))))
+
+(defn day23a-result []
+  (:mulval (execute-day23-program (parse-day23a-program) {})))
+
+;; By inspection the instructions calculate a count of composite
+;; numbers as implemented below...
+
+(declare prime?)
+(defn prime* [n]
+  (let [composite (some true? (for [i (range 2 n) :when (prime? i)] (zero? (mod n i))))]
+    (not composite)))
+(def prime? (memoize prime*))
+
+(defn find-composites []
+  (let [start (+ 100000 (* 93 100))
+        end (+ start 17000)
+        candidates (range start (inc end) 17)]
+    (count (filter (complement prime?) candidates))))
+
+(defn day23b-result []
+  (find-composites))
+
+;;; Day 24
+
+(defn read-inventory [text]
+  (let [parse-line (fn [line] (->> (re-matches #"(\d+)/(\d+)" line)
+                                  (drop 1)
+                                  (map #(Integer/parseInt %))
+                                  (vec)))]
+    (into #{} (map parse-line (str/split-lines text)))))
+
+(defn bridge-strength [pieces]
+  (reduce + (map (partial apply +) pieces)))
+
+(defn other-pin [pin piece]
+  (if (= (first piece) pin)
+    (second piece)
+    (first piece)))
+
+(defn matches-pin [pin piece]
+  (or (= (first piece) pin)
+      (= (second piece) pin)))
+
+(defn maximal-elements
+  "Like `max-key` but returns all equal matches"
+  [k elts]
+  (if-let [[x & xs] elts]
+    (reduce (fn [ys x]
+              (let [c (compare (k x) (k (peek ys)))]
+                (cond
+                  (pos? c) [x]
+                  (neg? c) ys
+                  :else    (conj ys x))))
+            [x]
+            xs)
+    []))
+
+;; Part a compares by strength, part b by length then strength. In
+;; each case, however deep in the recursion we are, we can ignore all
+;; but the best bridges as incorporating the shared prefix segment
+;; into either bridge cannot change the ordering.
+
+(defn best-bridges [comparator pin inventory]
+  (let [continue-bridge (fn [next-piece]
+                          (let [remaining-pieces (disj inventory next-piece)
+                                new-end-pin (other-pin pin next-piece)
+                                continuation-bridges (best-bridges comparator new-end-pin remaining-pieces)
+                                suffixes (map (partial cons next-piece) continuation-bridges)]
+                            (if (empty? suffixes)
+                              [[next-piece]]
+                              suffixes)))]
+    (->> inventory
+         (filter (partial matches-pin pin))
+         (mapcat continue-bridge)
+         (maximal-elements comparator))))
+
+(defn day24a-result []
+  (bridge-strength (first (best-bridges bridge-strength 0 (read-inventory (input-text 24))))))
+
+(defn day24b-result []
+  (apply max (map bridge-strength (best-bridges (juxt count bridge-strength) 0 (read-inventory (input-text 24))))))
+
+;;; Day 25
+
+;; Parsing this is hardly worth it but should at least save time lost
+;; to typos
+
+(def eol (lit \newline))
+
+(def state-header (fmap (fn [[_ s _]] s)
+                        (sq (lit-str "In state ") ch (lit \:))))
+
+(def transition-header (fmap (fn [[_ _ i]] [:match i])
+                             (sq (many space) (lit-str "If the current value is ") (nat) (lit \:))))
+
+(def transition-write (fmap (fn [[_ _ i _]] [:write i])
+                            (sq (many space) (lit-str "- Write the value ") (nat) (lit \.))))
+
+(def transition-move (fmap (fn [[_ _ dir _]] [:move (case (apply str dir) "left" :left "right" :right)])
+                           (sq (many space) (lit-str "- Move one slot to the ") (alt (lit-str "left") (lit-str "right")) (lit \.))))
+
+(def transition-continue (fmap (fn [[_ _ s _]] [:next s])
+                               (sq (many space) (lit-str "- Continue with state ") ch (lit \.))))
+
+(def state-transition (fmap (fn [[h _ w _ m _ c _]]
+                              (into {} [h w m c]))
+                            (sq transition-header eol
+                                transition-write eol
+                                transition-move eol
+                                transition-continue eol)))
+
+(def state-recipe (fmap (fn [[s _ ts]] [s (vec ts)])
+                        (sq state-header eol (many state-transition))))
+
+(def turing-machine-definition (fmap (fn [recipes] (into {} recipes))
+                                     (many-sep-by eol state-recipe)))
+
+(def initial-turing-machine-state (fmap (fn [[_ s _]] [:start-state s])
+                                        (sq (lit-str "Begin in state ") ch (lit \.))))
+
+(def turing-machine-check (fmap (fn [[_ n _]] [:check-step n]) (sq (lit-str "Perform a diagnostic checksum after ") (nat) (lit-str " steps."))))
+
+(def day25-file (fmap (fn [[start _ check _ _ machine _]] (into {} [start check [:machine machine]]))
+                      (sq initial-turing-machine-state eol
+                          turing-machine-check eol eol
+                          turing-machine-definition)))
+
+
+(defn day25-input [text]
+  (run-parse day25-file text))
+
+;; A Turing machine - don't need any notion of origin we just need to
+;; extend in both directions. Let's use a zipper.
+
+(defn initial-machine-tape []
+  (z/next (z/seq-zip '(0))))
+
+(defn tape-left [zipper]
+  (if-let [zipper' (z/left zipper)]
+    zipper'
+    (-> zipper
+        (z/insert-left 0)
+        (z/left))))
+
+(defn tape-right [zipper]
+  (if-let [zipper' (z/right zipper)]
+    zipper'
+    (-> zipper
+        (z/insert-right 0)
+        (z/right))))
+
+(defn tape-move [zipper direction]
+  (case direction
+    :left (tape-left zipper)
+    :right (tape-right zipper)))
+
+(defn apply-machine
+  "Apply `machine`'s `state` rules to the tape represented by `zipper`"
+  [machine state zipper]
+  (let [rules (machine state)
+        value (z/node zipper)
+        rule (first (filter #(= (:match %) value) rules))
+        tape (-> zipper
+                 (z/replace (:write rule))
+                 (tape-move (:move rule)))]
+    [tape (:next rule)]))
+
+(defn turing-machine-sequence
+  [machine start-state]
+   (iterate (fn [[t s]] (apply-machine machine s t)) [(initial-machine-tape) start-state]))
+
+(defn run-turing-machine
+  [machine state steps]
+  (let [tape (first (nth (turing-machine-sequence machine state) steps))]
+    (z/root tape)))
+
+(defn day25a-result []
+  (let [{:keys [start-state check-step machine]} (day25-input (input-text 25))]
+    (reduce + (run-turing-machine machine start-state check-step))))
 
 ;;; Main
 

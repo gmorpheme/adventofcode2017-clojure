@@ -1,6 +1,7 @@
 # adventofcode-clojure
 
-Clojure solutions for [adventofcode.com](Advent of Code 2017) exercises.
+A set of Clojure solutions for [adventofcode.com](Advent of Code 2017)
+exercises.
 
 ## Usage
 
