@@ -9,14 +9,6 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* false)
 
-;;; Todos
-
-;; - Speed up day 5 part b
-;; - Speed up day 15
-;; - Remove pointless protocol in day 16
-;; - Optimise away some stack depth in the parser combinators for day 9 / 16
-;; - Add some specs
-
 ;;; Prologue
 
 ;; Common requirements get refactored up to here when they're needed
@@ -214,41 +206,30 @@
 
 ;;; Day 5
 
-;; Uses explicit state. Also really slow.
+(defn step-jump-state
+  "Return [new-state new-instruction-pointer]"
+  [[state ip]]
+  (when-let [jump (get state ip)]
+    [(update state ip inc) (+ ip jump)]))
 
-(defn process [state index]
-  (when-let [jump (get @state index)]
-    (vswap! state update index inc)
-    jump))
+(defn iterate-jump-state [state step-fn]
+  (drop 1 (iterate step-fn [state 0])))
 
-(defn run-day5 [state]
-  (loop [count 0 p 0]
-    (if-let [jump (process state p)]
-      (recur (inc count) (+ jump p))
-      count)))
-
-(defn load-instructions []
-  (->> (str/split-lines (input-text 5))
-       (map #(Integer/parseInt %))
-       vec))
+(defn run-jump-state [state step-fn]
+  (count (take-while some? (iterate-jump-state state step-fn))))
 
 (defn day5a-result []
-  (run-day5 (volatile! (load-instructions))))
+  (run-jump-state (load-instructions) step-jump-state))
 
-(defn process-b [state index]
-  (when-let [jump (get @state index)]
+(defn step-b-jump-state
+  "Return [new-state new-instruction-pointer]"
+  [[state ip]]
+  (when-let [jump (get state ip)]
     (let [delta (if (>= jump 3) -1 1)]
-      (vswap! state update index #(+ % delta)))
-    jump))
-
-(defn run-day5b [state]
-  (loop [count 0 p 0]
-    (if-let [jump (process-b state p)]
-      (recur (inc count) (+ jump p))
-      count)))
+      [(update state ip #(+ % delta)) (+ ip jump)])))
 
 (defn day5b-result []
-  (run-day5b (volatile! (load-instructions))))
+  (run-jump-state (load-instructions) step-b-jump-state))
 
 ;;; Day 6
 

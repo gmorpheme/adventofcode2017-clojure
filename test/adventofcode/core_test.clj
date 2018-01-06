@@ -49,11 +49,10 @@
     "oiii ioii iioi iiio" false))
 
 (deftest test-day5a
-  (is (= (run-day5 (volatile! [0 3 0 1 -3])) 5)))
+  (is (= (run-jump-state [0 3 0 1 -3] step-jump-state) 5)))
 
 (deftest test-day5b
-  (is (= (run-day5b (volatile! [0 3 0 1 -3])) 10)))
-
+  (is (= (run-jump-state [0 3 0 1 -3] step-b-jump-state) 10)))
 
 ;;; qq day6
 
